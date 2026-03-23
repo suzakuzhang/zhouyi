@@ -224,14 +224,14 @@ export default function ResultPage() {
       {/* LLM Summary (Layer 4) */}
       <section className="space-y-3">
         <div className="flex items-center gap-3">
-          <h2 className="font-semibold text-sm">综合解读</h2>
+          <h2 className="font-semibold text-sm">赛博解卦</h2>
           {!llmSummary && (
             <button
               onClick={requestLlmSummary}
               disabled={llmLoading}
               className="px-3 py-1 text-xs border border-[var(--border)] rounded hover:border-[var(--accent)] disabled:opacity-50"
             >
-              {llmLoading ? "生成中…" : "生成 AI 摘要"}
+              {llmLoading ? "解卦中…" : "赛博解卦"}
             </button>
           )}
         </div>
@@ -255,7 +255,7 @@ export default function ResultPage() {
         )}
         {!llmSummary && !llmLoading && (
           <p className="text-xs text-[var(--muted)]">
-            AI 摘要基于上述经传文本生成，仅作阅读辅助，不构成任何现实决策建议。
+            赛博解卦基于上述经传文本生成，仅作阅读辅助，不构成任何现实决策建议。
           </p>
         )}
       </section>
