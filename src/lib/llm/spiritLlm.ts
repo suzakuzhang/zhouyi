@@ -54,7 +54,7 @@ async function callDeepSeekText(
         { role: "user", content: userPrompt },
       ],
       temperature: 0.85,
-      max_tokens: 500,
+      max_tokens: 1000,
     }),
   });
 

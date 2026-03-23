@@ -31,7 +31,7 @@ export async function generateGeminiReply(
         ],
         generationConfig: {
           temperature: 0.8,
-          maxOutputTokens: 400,
+          maxOutputTokens: 1000,
         },
       }),
     }
