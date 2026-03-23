@@ -94,7 +94,14 @@ export default function CastPage() {
     setLoading(true);
     setError("");
 
-    const payload = {
+    // Attach access token if available
+    let accessToken = "";
+    try {
+      const saved = localStorage.getItem("zhouyi_access");
+      if (saved) accessToken = JSON.parse(saved).accessToken ?? "";
+    } catch { /* ignore */ }
+
+    const payload: Record<string, unknown> = {
       method: castMethod,
       question,
       lines: castLines.map((l, i) => ({
@@ -103,6 +110,7 @@ export default function CastPage() {
         changing: l.changing,
       })),
     };
+    if (accessToken) payload.access_token = accessToken;
 
     try {
       const res = await fetch("/api/cast", {

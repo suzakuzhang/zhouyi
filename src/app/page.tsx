@@ -4,13 +4,69 @@ import { useEffect, useState } from "react";
 
 export default function Home() {
   const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [activating, setActivating] = useState(false);
+  const [activateMsg, setActivateMsg] = useState("");
+  const [role, setRole] = useState("normal");
+  const [showInviteInput, setShowInviteInput] = useState(false);
 
   useEffect(() => {
     fetch("/api/free-usage")
       .then((r) => r.json())
       .then((d) => setFreeRemaining(d.remaining ?? null))
       .catch(() => {});
+
+    // Restore access state
+    const saved = localStorage.getItem("zhouyi_access");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.accessToken) {
+          setRole(parsed.role ?? "normal");
+          // Verify token is still valid
+          fetch(`/api/access/status?access_token=${parsed.accessToken}`)
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.activated) {
+                setRole(d.role);
+              } else {
+                localStorage.removeItem("zhouyi_access");
+                setRole("normal");
+              }
+            })
+            .catch(() => {});
+        }
+      } catch { /* ignore */ }
+    }
   }, []);
+
+  const activateInvite = async () => {
+    if (!inviteCode.trim()) return;
+    setActivating(true);
+    setActivateMsg("");
+    try {
+      const res = await fetch("/api/access/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "invite", inviteCode: inviteCode.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.accessToken) {
+        localStorage.setItem("zhouyi_access", JSON.stringify(data));
+        setRole(data.role);
+        setActivateMsg("激活成功！");
+        setShowInviteInput(false);
+        setInviteCode("");
+      } else {
+        setActivateMsg(data.error ?? "激活失败");
+      }
+    } catch {
+      setActivateMsg("网络错误");
+    }
+    setActivating(false);
+  };
+
+  const isActivated = role !== "normal";
 
   return (
     <div className="space-y-8">
@@ -21,16 +77,71 @@ export default function Home() {
         </p>
       </section>
 
-      {freeRemaining !== null && (
-        <div className="text-sm text-[var(--muted)] bg-gray-50 border border-[var(--border)] rounded px-4 py-3">
-          免费体验剩余 <strong className="text-[var(--foreground)]">{freeRemaining}</strong> 次
-          {freeRemaining <= 0 && (
-            <span className="ml-2 text-amber-600">
-              （已用完，请使用邀请码激活）
+      {/* Access status */}
+      <div className="bg-gray-50 border border-[var(--border)] rounded px-4 py-3 space-y-2">
+        {isActivated ? (
+          <div className="flex items-center justify-between">
+            <span className="text-sm">
+              已激活
+              <span className="ml-2 px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">
+                {role === "admin" ? "管理员" : role === "pilot" ? "先行者" : "邀请码用户"}
+              </span>
             </span>
-          )}
-        </div>
-      )}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--muted)]">
+                免费体验剩余 <strong className="text-[var(--foreground)]">{freeRemaining ?? "..."}</strong> 次
+                {freeRemaining !== null && freeRemaining <= 0 && (
+                  <span className="ml-2 text-amber-600">（已用完）</span>
+                )}
+              </span>
+              {!showInviteInput && (
+                <button
+                  onClick={() => setShowInviteInput(true)}
+                  className="text-sm px-3 py-1 border border-[var(--border)] rounded hover:border-[var(--accent)] transition-colors"
+                >
+                  输入邀请码
+                </button>
+              )}
+            </div>
+
+            {showInviteInput && (
+              <div className="flex gap-2 items-center pt-1">
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === "Enter" && activateInvite()}
+                  placeholder="请输入邀请码"
+                  maxLength={20}
+                  className="flex-1 max-w-[200px] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono"
+                />
+                <button
+                  onClick={activateInvite}
+                  disabled={activating || !inviteCode.trim()}
+                  className="px-4 py-1.5 bg-[#1a1a1a] text-white rounded text-sm disabled:opacity-50"
+                >
+                  {activating ? "激活中…" : "激活"}
+                </button>
+                <button
+                  onClick={() => { setShowInviteInput(false); setActivateMsg(""); }}
+                  className="text-xs text-[var(--muted)]"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+
+            {activateMsg && (
+              <p className={`text-sm ${activateMsg.includes("成功") ? "text-green-600" : "text-red-600"}`}>
+                {activateMsg}
+              </p>
+            )}
+          </>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <a
@@ -39,7 +150,7 @@ export default function Home() {
         >
           <h2 className="font-semibold mb-2">起卦</h2>
           <p className="text-sm text-[var(--muted)]">
-            输入六爻，生成本卦、变卦与阅读策略
+            铜钱法、梅花易数或复盘，生成本卦、变卦与阅读策略
           </p>
         </a>
 
