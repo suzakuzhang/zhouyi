@@ -14,7 +14,7 @@ export async function generateGeminiReply(
     throw new GeminiClientError("未检测到 GEMINI_API_KEY 环境变量");
   }
 
-  const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+  const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
