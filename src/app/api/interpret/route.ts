@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildInterpretSystemPrompt, buildInterpretUserPrompt } from "@/lib/llm/prompts";
 import { callDeepSeek, DeepSeekError } from "@/lib/llm/deepseek";
+import { getSession, addUsageLog } from "@/lib/access/session";
+import { ROLE_NORMAL } from "@/lib/access/roles";
+import type { Role } from "@/lib/access/roles";
 import type { StructureLayer } from "@/types/explain";
 import type { ReadingStrategy } from "@/types/reading";
 
@@ -18,11 +21,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Resolve role
+  const token = (body.access_token as string ?? req.headers.get("x-access-token") ?? "").trim();
+  let role: Role = ROLE_NORMAL;
+  let userId = "anonymous";
+  if (token) {
+    const session = getSession(token);
+    if (session) {
+      role = session.role as Role;
+      userId = session.userId;
+    }
+  }
+
   const systemPrompt = buildInterpretSystemPrompt();
   const userPrompt = buildInterpretUserPrompt(structure, readingStrategy, question);
 
   try {
     const result = await callDeepSeek(systemPrompt, userPrompt);
+
+    addUsageLog({
+      action: "interpret",
+      role,
+      userId,
+      hexagramName: structure.originalHexagramName,
+      question: question ?? "",
+      ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "",
+    });
+
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof DeepSeekError) {
