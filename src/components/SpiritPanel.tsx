@@ -129,17 +129,14 @@ export default function SpiritPanel(props: SpiritPanelProps) {
 
   if (status === "idle") {
     return (
-      <section className="space-y-2 border border-[var(--border)] rounded p-4">
-        <h2 className="font-semibold text-sm">卦灵模式</h2>
-        <p className="text-xs text-[var(--muted)]">
-          围绕{props.hexagramFullName}展开 10 分钟对话，以这个卦的视角和你一起探讨问题。
-        </p>
+      <section>
         <button
           onClick={startSession}
           disabled={loading}
-          className="px-4 py-1.5 text-sm border border-[var(--border)] rounded hover:border-[var(--accent)] disabled:opacity-50"
+          className="w-full py-4 rounded-lg font-medium text-base border-2 border-[#1a1a1a] text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white active:scale-[0.98] transition-all"
         >
-          {loading ? "启动中…" : "进入卦灵"}
+          {loading ? "召唤中…" : `召唤卦灵 · ${props.hexagramFullName}`}
+          <span className="block text-xs font-normal opacity-60 mt-0.5">以这个卦的视角和你对话 · 10 分钟 · 8 轮</span>
         </button>
       </section>
     );

@@ -231,18 +231,17 @@ export default function ResultPage() {
 
       {/* LLM Summary (Layer 4) */}
       <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <h2 className="font-semibold text-sm">赛博解卦</h2>
-          {!llmSummary && (
-            <button
-              onClick={requestLlmSummary}
-              disabled={llmLoading}
-              className="px-3 py-1 text-xs border border-[var(--border)] rounded hover:border-[var(--accent)] disabled:opacity-50"
-            >
-              {llmLoading ? "解卦中…" : "赛博解卦"}
-            </button>
-          )}
-        </div>
+        {!llmSummary && !llmLoading && (
+          <button
+            onClick={requestLlmSummary}
+            disabled={llmLoading}
+            className="w-full py-4 rounded-lg text-white font-medium text-base bg-gradient-to-r from-[#1a1a1a] to-[#333] hover:from-[#333] hover:to-[#555] active:scale-[0.98] transition-all shadow-sm"
+          >
+            赛博解卦
+            <span className="block text-xs font-normal opacity-70 mt-0.5">AI 深度解读卦象 · 象意 · 卦辞 · 势变 · 今解 · 可行</span>
+          </button>
+        )}
+        {llmLoading && <h2 className="font-semibold text-sm">赛博解卦</h2>}
         {llmError && <p className="text-sm text-red-600">{llmError}</p>}
         <LoadingOverlay
           visible={llmLoading}
@@ -281,11 +280,6 @@ export default function ResultPage() {
               </div>
             )}
           </div>
-        )}
-        {!llmSummary && !llmLoading && (
-          <p className="text-xs text-[var(--muted)]">
-            赛博解卦基于上述经传文本生成，仅作阅读辅助，不构成任何现实决策建议。
-          </p>
         )}
       </section>
 
