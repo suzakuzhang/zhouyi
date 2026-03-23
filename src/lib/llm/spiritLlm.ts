@@ -1,6 +1,18 @@
 import { generateGeminiReply, GeminiClientError } from "./gemini";
 import { callDeepSeek } from "./deepseek";
 
+function normalizeSpiritReply(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+
+  // If provider stops mid-sentence, add a soft landing instead of exposing hard cutoff.
+  if (/[。！？!?”"』》）)]$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `${trimmed}。`;
+}
+
 /**
  * 卦灵对话 LLM 调用，优先 Gemini，Gemini 不可用时降级到 DeepSeek。
  */
@@ -10,7 +22,8 @@ export async function generateSpiritReply(
 ): Promise<string> {
   // Try Gemini first
   try {
-    return await generateGeminiReply(systemPrompt, userPrompt);
+    const reply = await generateGeminiReply(systemPrompt, userPrompt);
+    return normalizeSpiritReply(reply);
   } catch (err) {
     if (err instanceof GeminiClientError) {
       console.log(`[卦灵] Gemini 不可用 (${err.message}), 降级到 DeepSeek`);
@@ -23,7 +36,7 @@ export async function generateSpiritReply(
   try {
     const dsSystem = systemPrompt + "\n\n输出要求：直接输出回复文本，不要输出 JSON。";
     const response = await callDeepSeekText(dsSystem, userPrompt);
-    return response;
+    return normalizeSpiritReply(response);
   } catch {
     throw new Error("Gemini 和 DeepSeek 均不可用");
   }

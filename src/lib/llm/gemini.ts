@@ -43,8 +43,15 @@ export async function generateGeminiReply(
   }
 
   const data = await response.json();
-  const text =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+  const parts = data?.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts)
+    ? parts
+      .map((part: { text?: unknown }) =>
+        typeof part?.text === "string" ? part.text : ""
+      )
+      .join("")
+      .trim()
+    : "";
   if (!text) {
     throw new GeminiClientError("Gemini 返回为空");
   }

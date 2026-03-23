@@ -70,6 +70,7 @@ interface LlmSummary {
   guaxiang: string;
   yaoci: string;
   biangua: string;
+  baihua?: string;
   jianyi: string;
   // backward compat
   overview?: string;
@@ -265,10 +266,16 @@ export default function ResultPage() {
                 <p className="text-sm leading-relaxed text-layer-system">{llmSummary.biangua}</p>
               </div>
             )}
+            {llmSummary.baihua && (
+              <div className="space-y-1 bg-amber-50 border border-amber-200 rounded px-4 py-3">
+                <p className="text-sm font-semibold">白话说人话</p>
+                <p className="text-sm leading-relaxed">{llmSummary.baihua}</p>
+              </div>
+            )}
             {llmSummary.jianyi && (
               <div className="space-y-1 bg-white border border-[var(--border)] rounded px-4 py-3">
                 <p className="text-sm font-semibold">当下启示</p>
-                <p className="text-sm leading-relaxed">{llmSummary.jianyi}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{llmSummary.jianyi}</p>
               </div>
             )}
             {/* backward compat for old format */}

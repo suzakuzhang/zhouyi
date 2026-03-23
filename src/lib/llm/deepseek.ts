@@ -34,7 +34,7 @@ export async function callDeepSeek(
       ],
       response_format: { type: "json_object" },
       temperature: 0.8,
-      max_tokens: 1500,
+      max_tokens: 2500,
     }),
   });
 

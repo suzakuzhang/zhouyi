@@ -146,7 +146,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
   }
 
   return (
-    <section className="border border-[var(--border)] rounded overflow-hidden">
+    <section className="border border-[var(--border)] rounded">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-[var(--border)]">
         <div className="flex items-center gap-3">
@@ -171,20 +171,21 @@ export default function SpiritPanel(props: SpiritPanelProps) {
       </div>
 
       {/* Messages */}
-      <div className="max-h-[28rem] overflow-y-auto px-4 py-3 space-y-3">
+      <div className="overflow-y-auto px-4 py-3 space-y-4" style={{ maxHeight: "32rem" }}>
         {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`text-sm leading-relaxed ${
-              m.role === "user" ? "flex justify-end" : "flex justify-start"
-            }`}
-          >
+          <div key={i} className={m.role === "user" ? "text-right" : ""}>
             <div
-              className={`px-4 py-3 rounded-lg max-w-[85%] whitespace-pre-wrap break-words ${
+              className={`text-sm leading-7 rounded-lg px-4 py-3 inline-block text-left ${
                 m.role === "user"
                   ? "bg-[#1a1a1a] text-white"
                   : "bg-gray-100 text-[var(--foreground)]"
               }`}
+              style={{
+                maxWidth: "90%",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                whiteSpace: "pre-wrap",
+              }}
             >
               {m.content}
             </div>
