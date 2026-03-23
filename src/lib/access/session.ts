@@ -21,11 +21,13 @@ interface AccessSession {
   expiresAt: string;
 }
 
-interface InviteCode {
+export interface InviteCode {
   code: string;
+  type: "whitelist" | "quota";  // 白名单（无限）或次数限制
   usedCount: number;
-  maxUses: number;
+  maxUses: number;              // whitelist 类型忽略此字段
   isActive: boolean;
+  label: string;                // 备注名，如"张三专属"
   createdBy: string;
   createdAt: string;
 }
@@ -58,7 +60,11 @@ function load(): DataStore {
       const parsed = JSON.parse(raw);
       return {
         accessSessions: parsed.accessSessions ?? {},
-        inviteCodes: parsed.inviteCodes ?? [],
+        inviteCodes: (parsed.inviteCodes ?? []).map((c: InviteCode) => ({
+          ...c,
+          type: c.type ?? "quota",
+          label: c.label ?? "",
+        })),
         freeUsedCount: parsed.freeUsedCount ?? 0,
         usageLogs: parsed.usageLogs ?? [],
       };
@@ -103,12 +109,6 @@ export function resetFreeUsage(): void {
   save(data);
 }
 
-export function setFreeLimit(newLimit: number): void {
-  // Store override in env or just reset counter; for simplicity we reset
-  // Actual limit change would need env var FREE_GLOBAL_LIMIT override
-  resetFreeUsage();
-}
-
 // ── Usage Logs ───────────────────────────────────────
 
 export function addUsageLog(log: Omit<UsageLog, "id" | "timestamp">): UsageLog {
@@ -119,23 +119,17 @@ export function addUsageLog(log: Omit<UsageLog, "id" | "timestamp">): UsageLog {
     ...log,
   };
   data.usageLogs.push(entry);
-
-  // Keep max 500 logs to prevent file bloat
   if (data.usageLogs.length > 500) {
     data.usageLogs = data.usageLogs.slice(-500);
   }
-
   save(data);
   return entry;
 }
 
 export function getUsageLogs(limit = 50, offset = 0): { logs: UsageLog[]; total: number } {
   const data = load();
-  const all = data.usageLogs.slice().reverse(); // newest first
-  return {
-    logs: all.slice(offset, offset + limit),
-    total: all.length,
-  };
+  const all = data.usageLogs.slice().reverse();
+  return { logs: all.slice(offset, offset + limit), total: all.length };
 }
 
 // ── Sessions ─────────────────────────────────────────
@@ -179,8 +173,14 @@ export function getSession(token: string): AccessSession | null {
     save(data);
     return null;
   }
-
   return session;
+}
+
+export function deleteSession(token: string): void {
+  if (!token) return;
+  const data = load();
+  delete data.accessSessions[token];
+  save(data);
 }
 
 // ── Invite Codes ─────────────────────────────────────
@@ -192,6 +192,15 @@ export function consumeInviteCode(code: string): InviteCode | null {
   const data = load();
   const item = data.inviteCodes.find((c) => c.code === key);
   if (!item || !item.isActive) return null;
+
+  // Whitelist: unlimited uses
+  if (item.type === "whitelist") {
+    item.usedCount += 1;
+    save(data);
+    return { ...item };
+  }
+
+  // Quota: check limit
   if (item.usedCount >= item.maxUses) {
     item.isActive = false;
     save(data);
@@ -204,8 +213,14 @@ export function consumeInviteCode(code: string): InviteCode | null {
   return { ...item };
 }
 
-export function createInviteCode(createdBy: string, maxUses = 10, code?: string): InviteCode {
-  const finalCode = code?.trim().toUpperCase() || `INV${randomToken().slice(0, 8).toUpperCase()}`;
+export function createInviteCode(opts: {
+  createdBy: string;
+  type: "whitelist" | "quota";
+  maxUses?: number;
+  code?: string;
+  label?: string;
+}): InviteCode {
+  const finalCode = opts.code?.trim().toUpperCase() || `INV${randomToken().slice(0, 8).toUpperCase()}`;
 
   const data = load();
   const existing = data.inviteCodes.find((c) => c.code === finalCode);
@@ -213,10 +228,12 @@ export function createInviteCode(createdBy: string, maxUses = 10, code?: string)
 
   const item: InviteCode = {
     code: finalCode,
+    type: opts.type,
     usedCount: 0,
-    maxUses: Math.max(1, maxUses),
+    maxUses: opts.type === "whitelist" ? 999999 : Math.max(1, opts.maxUses ?? 10),
     isActive: true,
-    createdBy,
+    label: opts.label ?? "",
+    createdBy: opts.createdBy,
     createdAt: utcNow(),
   };
 
@@ -229,24 +246,23 @@ export function listInviteCodes(): InviteCode[] {
   return load().inviteCodes;
 }
 
-export function updateInviteCodeQuota(
+export function updateInviteCode(
   code: string,
-  maxUses: number,
-  resetUsed = false
+  updates: { maxUses?: number; resetUsed?: boolean; label?: string; type?: "whitelist" | "quota" }
 ): InviteCode | null {
   const key = code.trim().toUpperCase();
   const data = load();
   const item = data.inviteCodes.find((c) => c.code === key);
   if (!item) return null;
 
-  item.maxUses = Math.max(1, maxUses);
-  if (resetUsed) item.usedCount = 0;
+  if (updates.type !== undefined) item.type = updates.type;
+  if (updates.maxUses !== undefined) item.maxUses = Math.max(1, updates.maxUses);
+  if (updates.resetUsed) item.usedCount = 0;
+  if (updates.label !== undefined) item.label = updates.label;
 
-  // Auto-reactivate if quota increased above used count
-  if (item.usedCount < item.maxUses) {
+  // Auto-reactivate
+  if (item.type === "whitelist" || item.usedCount < item.maxUses) {
     item.isActive = true;
-  } else {
-    item.isActive = false;
   }
 
   save(data);
@@ -258,10 +274,19 @@ export function toggleInviteCodeActive(code: string, isActive: boolean): InviteC
   const data = load();
   const item = data.inviteCodes.find((c) => c.code === key);
   if (!item) return null;
-
   item.isActive = isActive;
   save(data);
   return { ...item };
+}
+
+export function deleteInviteCode(code: string): boolean {
+  const key = code.trim().toUpperCase();
+  const data = load();
+  const idx = data.inviteCodes.findIndex((c) => c.code === key);
+  if (idx === -1) return false;
+  data.inviteCodes.splice(idx, 1);
+  save(data);
+  return true;
 }
 
 // ── Admin Validation ─────────────────────────────────

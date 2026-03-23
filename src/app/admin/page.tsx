@@ -11,14 +11,15 @@ interface UsageLog {
   hexagramName: string;
   question: string;
   ip?: string;
-  extra?: Record<string, unknown>;
 }
 
 interface InviteCode {
   code: string;
+  type: "whitelist" | "quota";
   usedCount: number;
   maxUses: number;
   isActive: boolean;
+  label: string;
   createdBy: string;
   createdAt: string;
 }
@@ -27,6 +28,18 @@ interface FreeUsage {
   used: number;
   limit: number;
   remaining: number;
+}
+
+// 所有 admin API 请求通过 header 传 token，不放 URL
+function adminFetch(url: string, token: string, opts?: RequestInit) {
+  return fetch(url, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Access-Token": token,
+      ...(opts?.headers ?? {}),
+    },
+  });
 }
 
 export default function AdminPage() {
@@ -41,18 +54,28 @@ export default function AdminPage() {
   // Logs
   const [logs, setLogs] = useState<UsageLog[]>([]);
   const [logTotal, setLogTotal] = useState(0);
+  const [logPage, setLogPage] = useState(0);
+  const LOG_PAGE_SIZE = 20;
 
   // Invite codes
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [newCodeInput, setNewCodeInput] = useState("");
   const [newCodeMaxUses, setNewCodeMaxUses] = useState("10");
+  const [newCodeType, setNewCodeType] = useState<"whitelist" | "quota">("quota");
+  const [newCodeLabel, setNewCodeLabel] = useState("");
+  const [codeError, setCodeError] = useState("");
 
   // Free usage
   const [freeUsage, setFreeUsage] = useState<FreeUsage | null>(null);
+  const [freeLoading, setFreeLoading] = useState(true);
 
-  // Quota editing
+  // Editing
   const [editingCode, setEditingCode] = useState("");
   const [editMaxUses, setEditMaxUses] = useState("");
+  const [editLabel, setEditLabel] = useState("");
+  const [editType, setEditType] = useState<"whitelist" | "quota">("quota");
+
+  // ── Auth ──────────────────────────────────────
 
   const login = async () => {
     setAuthError("");
@@ -75,28 +98,55 @@ export default function AdminPage() {
     }
   };
 
-  // Restore token
+  const logout = () => {
+    localStorage.removeItem("admin_token");
+    setToken("");
+    setAuthed(false);
+  };
+
+  // Restore & validate token
   useEffect(() => {
     const saved = localStorage.getItem("admin_token");
-    if (saved) {
-      setToken(saved);
-      setAuthed(true);
-    }
+    if (!saved) return;
+
+    // Validate token is still alive
+    fetch("/api/access/status", {
+      headers: { "X-Access-Token": saved },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.activated && d.role === "admin") {
+          setToken(saved);
+          setAuthed(true);
+        } else {
+          localStorage.removeItem("admin_token");
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem("admin_token");
+      });
   }, []);
+
+  // ── Data Fetching ─────────────────────────────
 
   const fetchLogs = useCallback(async () => {
     if (!token) return;
-    const res = await fetch(`/api/admin/logs?access_token=${token}&limit=100`);
+    const res = await adminFetch(
+      `/api/admin/logs?limit=${LOG_PAGE_SIZE}&offset=${logPage * LOG_PAGE_SIZE}`,
+      token
+    );
     if (res.ok) {
       const data = await res.json();
       setLogs(data.logs ?? []);
       setLogTotal(data.total ?? 0);
+    } else if (res.status === 403) {
+      logout();
     }
-  }, [token]);
+  }, [token, logPage]);
 
   const fetchCodes = useCallback(async () => {
     if (!token) return;
-    const res = await fetch(`/api/admin/invite-codes?access_token=${token}`);
+    const res = await adminFetch("/api/admin/invite-codes", token);
     if (res.ok) {
       const data = await res.json();
       setCodes(data.items ?? []);
@@ -105,10 +155,12 @@ export default function AdminPage() {
 
   const fetchFreeUsage = useCallback(async () => {
     if (!token) return;
-    const res = await fetch(`/api/admin/free-usage?access_token=${token}`);
+    setFreeLoading(true);
+    const res = await adminFetch("/api/admin/free-usage", token);
     if (res.ok) {
       setFreeUsage(await res.json());
     }
+    setFreeLoading(false);
   }, [token]);
 
   useEffect(() => {
@@ -119,58 +171,77 @@ export default function AdminPage() {
     }
   }, [authed, fetchLogs, fetchCodes, fetchFreeUsage]);
 
+  // ── Actions ───────────────────────────────────
+
   const createCode = async () => {
-    const res = await fetch("/api/admin/invite-codes", {
+    setCodeError("");
+    const res = await adminFetch("/api/admin/invite-codes", token, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        access_token: token,
         action: "create",
+        type: newCodeType,
         code: newCodeInput || undefined,
         maxUses: parseInt(newCodeMaxUses) || 10,
+        label: newCodeLabel,
       }),
     });
     if (res.ok) {
       setNewCodeInput("");
+      setNewCodeMaxUses("10");
+      setNewCodeLabel("");
       fetchCodes();
+    } else {
+      const data = await res.json();
+      setCodeError(data.error ?? "创建失败");
     }
   };
 
-  const updateQuota = async (code: string) => {
-    const res = await fetch("/api/admin/invite-codes", {
+  const updateCode = async (code: string) => {
+    const res = await adminFetch("/api/admin/invite-codes", token, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        access_token: token,
-        action: "update_quota",
+        action: "update",
         code,
         maxUses: parseInt(editMaxUses) || 10,
+        label: editLabel,
+        type: editType,
       }),
     });
     if (res.ok) {
       setEditingCode("");
-      setEditMaxUses("");
       fetchCodes();
     }
   };
 
   const toggleCode = async (code: string, isActive: boolean) => {
-    await fetch("/api/admin/invite-codes", {
+    await adminFetch("/api/admin/invite-codes", token, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ access_token: token, action: "toggle", code, isActive }),
+      body: JSON.stringify({ action: "toggle", code, isActive }),
+    });
+    fetchCodes();
+  };
+
+  const delCode = async (code: string) => {
+    if (!confirm(`确定删除邀请码 ${code}？`)) return;
+    await adminFetch("/api/admin/invite-codes", token, {
+      method: "POST",
+      body: JSON.stringify({ action: "delete", code }),
     });
     fetchCodes();
   };
 
   const resetFree = async () => {
-    await fetch("/api/admin/free-usage", {
+    if (!confirm("确定重置免费次数？所有未激活用户将重新获得 99 次。")) return;
+    await adminFetch("/api/admin/free-usage", token, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ access_token: token }),
+      body: JSON.stringify({}),
     });
     fetchFreeUsage();
   };
+
+  const totalLogPages = Math.ceil(logTotal / LOG_PAGE_SIZE);
+
+  // ── Login Page ────────────────────────────────
 
   if (!authed) {
     return (
@@ -180,6 +251,7 @@ export default function AdminPage() {
           type="password"
           value={adminCode}
           onChange={(e) => setAdminCode(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && login()}
           placeholder="管理员口令"
           className="w-full border border-[var(--border)] rounded px-3 py-2 text-sm"
         />
@@ -187,192 +259,274 @@ export default function AdminPage() {
           type="text"
           value={birthDate}
           onChange={(e) => setBirthDate(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && login()}
           placeholder="验证日期 (YYYY-MM-DD)"
           className="w-full border border-[var(--border)] rounded px-3 py-2 text-sm"
         />
         {authError && <p className="text-sm text-red-600">{authError}</p>}
-        <button
-          onClick={login}
-          className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm"
-        >
+        <button onClick={login} className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm">
           登录
         </button>
       </div>
     );
   }
 
+  // ── Main Panel ────────────────────────────────
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">管理后台</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">管理后台</h1>
+        <button onClick={logout} className="text-xs text-[var(--muted)] hover:text-red-600 underline">
+          退出登录
+        </button>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[var(--border)]">
-        {(["logs", "codes", "free"] as const).map((t) => (
+        {([
+          { key: "logs" as const, label: "使用日志" },
+          { key: "codes" as const, label: "邀请码管理" },
+          { key: "free" as const, label: "免费额度" },
+        ]).map((t) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={t.key}
+            onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm border-b-2 transition-colors ${
-              tab === t
-                ? "border-[#1a1a1a] font-medium"
-                : "border-transparent text-[var(--muted)]"
+              tab === t.key ? "border-[#1a1a1a] font-medium" : "border-transparent text-[var(--muted)]"
             }`}
           >
-            {t === "logs" ? "使用日志" : t === "codes" ? "邀请码管理" : "免费额度"}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Logs */}
+      {/* ── 使用日志 ── */}
       {tab === "logs" && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-[var(--muted)]">共 {logTotal} 条记录</p>
+            <p className="text-sm text-[var(--muted)]">共 {logTotal} 条</p>
             <button onClick={fetchLogs} className="text-xs text-[var(--muted)] underline">刷新</button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-left text-[var(--muted)]">
-                  <th className="py-2 pr-3">时间</th>
-                  <th className="py-2 pr-3">操作</th>
-                  <th className="py-2 pr-3">角色</th>
-                  <th className="py-2 pr-3">卦象</th>
-                  <th className="py-2 pr-3">问题</th>
-                  <th className="py-2 pr-3">IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id} className="border-b border-[var(--border)]">
-                    <td className="py-2 pr-3 text-xs whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleString("zh-CN")}
-                    </td>
-                    <td className="py-2 pr-3">{log.action}</td>
-                    <td className="py-2 pr-3">{log.role}</td>
-                    <td className="py-2 pr-3">{log.hexagramName}</td>
-                    <td className="py-2 pr-3 max-w-[200px] truncate">{log.question || "-"}</td>
-                    <td className="py-2 pr-3 text-xs text-[var(--muted)]">{log.ip || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          {/* 卡片式日志（移动端友好） */}
+          <div className="space-y-2">
+            {logs.map((log) => (
+              <div key={log.id} className="border border-[var(--border)] rounded p-3 text-sm space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{log.hexagramName || "-"}</span>
+                  <span className="text-xs text-[var(--muted)]">
+                    {new Date(log.timestamp).toLocaleString("zh-CN")}
+                  </span>
+                </div>
+                <p className="text-[var(--muted)] text-xs truncate">{log.question || "（无问题）"}</p>
+                <div className="flex gap-3 text-xs text-[var(--muted)]">
+                  <span>{log.action}</span>
+                  <span>{log.role}</span>
+                  {log.ip && <span>{log.ip}</span>}
+                </div>
+              </div>
+            ))}
+            {logs.length === 0 && <p className="text-sm text-[var(--muted)]">暂无记录</p>}
           </div>
-          {logs.length === 0 && <p className="text-sm text-[var(--muted)]">暂无记录</p>}
+
+          {/* 分页 */}
+          {totalLogPages > 1 && (
+            <div className="flex items-center gap-2 justify-center text-sm">
+              <button
+                disabled={logPage === 0}
+                onClick={() => setLogPage((p) => p - 1)}
+                className="px-2 py-1 border border-[var(--border)] rounded disabled:opacity-30"
+              >
+                上一页
+              </button>
+              <span className="text-[var(--muted)]">{logPage + 1} / {totalLogPages}</span>
+              <button
+                disabled={logPage >= totalLogPages - 1}
+                onClick={() => setLogPage((p) => p + 1)}
+                className="px-2 py-1 border border-[var(--border)] rounded disabled:opacity-30"
+              >
+                下一页
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Invite Codes */}
+      {/* ── 邀请码管理 ── */}
       {tab === "codes" && (
         <div className="space-y-4">
-          {/* Create */}
-          <div className="flex gap-2 items-end">
-            <div>
-              <label className="text-xs text-[var(--muted)]">邀请码（可选，留空自动生成）</label>
-              <input
-                type="text"
-                value={newCodeInput}
-                onChange={(e) => setNewCodeInput(e.target.value)}
-                placeholder="自动生成"
-                className="w-full border border-[var(--border)] rounded px-3 py-1.5 text-sm"
-              />
+          {/* 创建区 */}
+          <div className="border border-[var(--border)] rounded p-4 space-y-3">
+            <p className="text-sm font-medium">创建邀请码</p>
+            <div className="flex gap-2 flex-wrap items-end">
+              <div>
+                <label className="text-xs text-[var(--muted)]">类型</label>
+                <select
+                  value={newCodeType}
+                  onChange={(e) => setNewCodeType(e.target.value as "whitelist" | "quota")}
+                  className="block border border-[var(--border)] rounded px-2 py-1.5 text-sm"
+                >
+                  <option value="whitelist">白名单（无限）</option>
+                  <option value="quota">次数限制</option>
+                </select>
+              </div>
+              {newCodeType === "quota" && (
+                <div>
+                  <label className="text-xs text-[var(--muted)]">额度</label>
+                  <input
+                    type="number"
+                    value={newCodeMaxUses}
+                    onChange={(e) => setNewCodeMaxUses(e.target.value)}
+                    className="block w-20 border border-[var(--border)] rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="text-xs text-[var(--muted)]">邀请码（留空自动生成）</label>
+                <input
+                  type="text"
+                  value={newCodeInput}
+                  onChange={(e) => setNewCodeInput(e.target.value)}
+                  placeholder="自动"
+                  className="block w-28 border border-[var(--border)] rounded px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--muted)]">备注</label>
+                <input
+                  type="text"
+                  value={newCodeLabel}
+                  onChange={(e) => setNewCodeLabel(e.target.value)}
+                  placeholder="如：张三专属"
+                  className="block w-32 border border-[var(--border)] rounded px-2 py-1.5 text-sm"
+                />
+              </div>
+              <button onClick={createCode} className="px-4 py-1.5 bg-[#1a1a1a] text-white rounded text-sm">
+                创建
+              </button>
             </div>
-            <div>
-              <label className="text-xs text-[var(--muted)]">额度</label>
-              <input
-                type="number"
-                value={newCodeMaxUses}
-                onChange={(e) => setNewCodeMaxUses(e.target.value)}
-                className="w-20 border border-[var(--border)] rounded px-3 py-1.5 text-sm"
-              />
-            </div>
-            <button
-              onClick={createCode}
-              className="px-4 py-1.5 bg-[#1a1a1a] text-white rounded text-sm"
-            >
-              创建
-            </button>
+            {codeError && <p className="text-sm text-red-600">{codeError}</p>}
           </div>
 
-          {/* List */}
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-left text-[var(--muted)]">
-                <th className="py-2 pr-3">邀请码</th>
-                <th className="py-2 pr-3">已用/额度</th>
-                <th className="py-2 pr-3">状态</th>
-                <th className="py-2 pr-3">创建时间</th>
-                <th className="py-2 pr-3">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {codes.map((c) => (
-                <tr key={c.code} className="border-b border-[var(--border)]">
-                  <td className="py-2 pr-3 font-mono text-xs">{c.code}</td>
-                  <td className="py-2 pr-3">{c.usedCount}/{c.maxUses}</td>
-                  <td className="py-2 pr-3">
-                    <span className={c.isActive ? "text-green-600" : "text-red-500"}>
+          {/* 列表 */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-[var(--muted)]">{codes.length} 个邀请码</p>
+            <button onClick={fetchCodes} className="text-xs text-[var(--muted)] underline">刷新</button>
+          </div>
+
+          <div className="space-y-2">
+            {codes.map((c) => (
+              <div key={c.code} className="border border-[var(--border)] rounded p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-medium">{c.code}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      c.type === "whitelist" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+                    }`}>
+                      {c.type === "whitelist" ? "白名单" : "次数"}
+                    </span>
+                    <span className={`text-xs ${c.isActive ? "text-green-600" : "text-red-500"}`}>
                       {c.isActive ? "有效" : "停用"}
                     </span>
-                  </td>
-                  <td className="py-2 pr-3 text-xs">{new Date(c.createdAt).toLocaleDateString("zh-CN")}</td>
-                  <td className="py-2 pr-3 space-x-2">
+                  </div>
+                  <span className="text-xs text-[var(--muted)]">
+                    {c.type === "quota" ? `${c.usedCount}/${c.maxUses}` : `已用 ${c.usedCount} 次`}
+                  </span>
+                </div>
+
+                {c.label && <p className="text-xs text-[var(--muted)]">备注：{c.label}</p>}
+
+                {editingCode === c.code ? (
+                  <div className="flex gap-2 flex-wrap items-end border-t border-[var(--border)] pt-2">
+                    <select
+                      value={editType}
+                      onChange={(e) => setEditType(e.target.value as "whitelist" | "quota")}
+                      className="border border-[var(--border)] rounded px-2 py-1 text-xs"
+                    >
+                      <option value="whitelist">白名单</option>
+                      <option value="quota">次数</option>
+                    </select>
+                    {editType === "quota" && (
+                      <input
+                        type="number"
+                        value={editMaxUses}
+                        onChange={(e) => setEditMaxUses(e.target.value)}
+                        placeholder="额度"
+                        className="w-16 border border-[var(--border)] rounded px-2 py-1 text-xs"
+                      />
+                    )}
+                    <input
+                      type="text"
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      placeholder="备注"
+                      className="w-24 border border-[var(--border)] rounded px-2 py-1 text-xs"
+                    />
+                    <button onClick={() => updateCode(c.code)} className="text-xs text-blue-600 underline">保存</button>
+                    <button onClick={() => setEditingCode("")} className="text-xs text-[var(--muted)] underline">取消</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 text-xs">
                     <button
                       onClick={() => toggleCode(c.code, !c.isActive)}
-                      className="text-xs underline text-[var(--muted)]"
+                      className="text-[var(--muted)] underline"
                     >
                       {c.isActive ? "停用" : "启用"}
                     </button>
-                    {editingCode === c.code ? (
-                      <span className="inline-flex gap-1 items-center">
-                        <input
-                          type="number"
-                          value={editMaxUses}
-                          onChange={(e) => setEditMaxUses(e.target.value)}
-                          className="w-16 border border-[var(--border)] rounded px-1 py-0.5 text-xs"
-                        />
-                        <button onClick={() => updateQuota(c.code)} className="text-xs underline text-blue-600">确认</button>
-                        <button onClick={() => setEditingCode("")} className="text-xs underline text-[var(--muted)]">取消</button>
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => { setEditingCode(c.code); setEditMaxUses(String(c.maxUses)); }}
-                        className="text-xs underline text-[var(--muted)]"
-                      >
-                        改额度
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {codes.length === 0 && <p className="text-sm text-[var(--muted)]">暂无邀请码</p>}
+                    <button
+                      onClick={() => {
+                        setEditingCode(c.code);
+                        setEditMaxUses(String(c.maxUses));
+                        setEditLabel(c.label);
+                        setEditType(c.type);
+                      }}
+                      className="text-[var(--muted)] underline"
+                    >
+                      编辑
+                    </button>
+                    <button onClick={() => delCode(c.code)} className="text-red-400 underline">
+                      删除
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {codes.length === 0 && <p className="text-sm text-[var(--muted)]">暂无邀请码</p>}
+          </div>
         </div>
       )}
 
-      {/* Free Usage */}
-      {tab === "free" && freeUsage && (
+      {/* ── 免费额度 ── */}
+      {tab === "free" && (
         <div className="space-y-4">
-          <div className="border border-[var(--border)] rounded p-4 space-y-2">
-            <p className="text-sm">全局免费额度：<strong>{freeUsage.limit}</strong> 次</p>
-            <p className="text-sm">已使用：<strong>{freeUsage.used}</strong> 次</p>
-            <p className="text-sm">剩余：<strong>{freeUsage.remaining}</strong> 次</p>
-            <div className="w-full bg-gray-200 rounded h-2">
-              <div
-                className="bg-[#1a1a1a] h-2 rounded transition-all"
-                style={{ width: `${Math.min(100, (freeUsage.used / freeUsage.limit) * 100)}%` }}
-              />
-            </div>
-          </div>
-          <button
-            onClick={resetFree}
-            className="px-4 py-1.5 border border-red-300 text-red-600 rounded text-sm hover:bg-red-50"
-          >
-            重置免费次数
-          </button>
-          <p className="text-xs text-[var(--muted)]">
-            重置后免费计数归零，所有未激活用户将重新获得 99 次体验机会。
-          </p>
+          {freeLoading && !freeUsage ? (
+            <p className="text-sm text-[var(--muted)]">加载中…</p>
+          ) : freeUsage ? (
+            <>
+              <div className="border border-[var(--border)] rounded p-4 space-y-2">
+                <p className="text-sm">全局免费额度：<strong>{freeUsage.limit}</strong> 次</p>
+                <p className="text-sm">已使用：<strong>{freeUsage.used}</strong> 次</p>
+                <p className="text-sm">剩余：<strong>{freeUsage.remaining}</strong> 次</p>
+                <div className="w-full bg-gray-200 rounded h-2">
+                  <div
+                    className="bg-[#1a1a1a] h-2 rounded transition-all"
+                    style={{ width: `${Math.min(100, (freeUsage.used / freeUsage.limit) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={resetFree} className="px-4 py-1.5 border border-red-300 text-red-600 rounded text-sm hover:bg-red-50">
+                  重置免费次数
+                </button>
+                <button onClick={fetchFreeUsage} className="text-xs text-[var(--muted)] underline self-center">
+                  刷新
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-red-600">加载失败</p>
+          )}
         </div>
       )}
     </div>
