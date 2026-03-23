@@ -171,25 +171,23 @@ export default function SpiritPanel(props: SpiritPanelProps) {
       </div>
 
       {/* Messages */}
-      <div className="h-64 overflow-y-auto px-4 py-3 space-y-3">
+      <div className="max-h-[28rem] overflow-y-auto px-4 py-3 space-y-3">
         {messages.map((m, i) => (
           <div
             key={i}
             className={`text-sm leading-relaxed ${
-              m.role === "user"
-                ? "text-right"
-                : ""
+              m.role === "user" ? "flex justify-end" : "flex justify-start"
             }`}
           >
-            <span
-              className={`inline-block px-3 py-2 rounded-lg max-w-[85%] text-left ${
+            <div
+              className={`px-4 py-3 rounded-lg max-w-[85%] whitespace-pre-wrap break-words ${
                 m.role === "user"
                   ? "bg-[#1a1a1a] text-white"
                   : "bg-gray-100 text-[var(--foreground)]"
               }`}
             >
               {m.content}
-            </span>
+            </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
