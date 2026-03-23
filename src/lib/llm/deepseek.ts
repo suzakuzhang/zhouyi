@@ -33,8 +33,8 @@ export async function callDeepSeek(
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 800,
+      temperature: 0.8,
+      max_tokens: 1500,
     }),
   });
 

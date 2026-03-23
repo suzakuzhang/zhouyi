@@ -66,9 +66,14 @@ function SmallHexCard({ label, hex }: { label: string; hex: HexagramBrief }) {
 }
 
 interface LlmSummary {
-  overview: string;
-  keyTexts: string;
-  summary: string;
+  guaxiang: string;
+  yaoci: string;
+  biangua: string;
+  jianyi: string;
+  // backward compat
+  overview?: string;
+  keyTexts?: string;
+  summary?: string;
 }
 
 export default function ResultPage() {
@@ -182,7 +187,6 @@ export default function ResultPage() {
       <section className="space-y-2">
         <h2 className="font-semibold text-sm">阅读策略</h2>
         <p className="text-sm bg-gray-50 rounded px-3 py-2 border border-[var(--border)]">
-          <span className="text-xs text-[var(--muted)] mr-2">[{readingStrategy.policyName}]</span>
           {readingStrategy.rationale}
         </p>
       </section>
@@ -237,20 +241,35 @@ export default function ResultPage() {
         </div>
         {llmError && <p className="text-sm text-red-600">{llmError}</p>}
         {llmSummary && (
-          <div className="space-y-3 bg-gray-50 border border-[var(--border)] rounded p-4">
-            <div className="space-y-1">
-              <TextLayerLabel layer="系统摘要" />
-              <p className="text-sm font-medium">卦象概述</p>
-              <p className="text-sm text-layer-system leading-relaxed">{llmSummary.overview}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">经文要点</p>
-              <p className="text-sm text-layer-system leading-relaxed">{llmSummary.keyTexts}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">综合提示</p>
-              <p className="text-sm text-layer-system leading-relaxed">{llmSummary.summary}</p>
-            </div>
+          <div className="space-y-4 bg-gray-50 border border-[var(--border)] rounded p-5">
+            {llmSummary.guaxiang && (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">卦象解析</p>
+                <p className="text-sm leading-relaxed text-layer-system">{llmSummary.guaxiang}</p>
+              </div>
+            )}
+            {llmSummary.yaoci && (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">爻辞精解</p>
+                <p className="text-sm leading-relaxed text-layer-system">{llmSummary.yaoci}</p>
+              </div>
+            )}
+            {llmSummary.biangua && (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">动变趋势</p>
+                <p className="text-sm leading-relaxed text-layer-system">{llmSummary.biangua}</p>
+              </div>
+            )}
+            {llmSummary.jianyi && (
+              <div className="space-y-1 bg-white border border-[var(--border)] rounded px-4 py-3">
+                <p className="text-sm font-semibold">当下启示</p>
+                <p className="text-sm leading-relaxed">{llmSummary.jianyi}</p>
+              </div>
+            )}
+            {/* backward compat for old format */}
+            {!llmSummary.guaxiang && llmSummary.overview && (
+              <p className="text-sm leading-relaxed text-layer-system">{llmSummary.overview}</p>
+            )}
           </div>
         )}
         {!llmSummary && !llmLoading && (
