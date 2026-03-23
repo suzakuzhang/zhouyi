@@ -33,6 +33,20 @@ export default function RootLayout({
         <main className="max-w-4xl mx-auto px-6 py-8">
           {children}
         </main>
+        <footer className="border-t border-[var(--border)] px-6 py-4 mt-8">
+          <div className="max-w-4xl mx-auto text-center text-xs text-[var(--muted)]">
+            <a
+              href="https://github.com/suzakuzhang/zhouyi"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[var(--foreground)] underline"
+            >
+              GitHub
+            </a>
+            <span className="mx-2">·</span>
+            <span>Created by Shumin Zhang</span>
+          </div>
+        </footer>
       </body>
     </html>
   );
