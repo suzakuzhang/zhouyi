@@ -3,9 +3,9 @@ import {
   registerCast,
   getCastContext,
   createSpiritSession,
+  addMessage,
 } from "@/lib/spirit/session";
-import { addMessage } from "@/lib/spirit/session";
-import { generateGeminiReply, GeminiClientError } from "@/lib/llm/gemini";
+import { generateSpiritReply } from "@/lib/llm/spiritLlm";
 import { buildSpiritSystemPrompt, buildSpiritOpeningPrompt } from "@/lib/spirit/prompts";
 
 export async function POST(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "缺少 castId" }, { status: 400 });
   }
 
-  // Register cast context if provided in request (first time)
+  // Register cast context if provided
   if (body.hexagramName) {
     registerCast({
       castId,
@@ -41,7 +41,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "创建卦灵会话失败" }, { status: 500 });
   }
 
-  // Generate opening message
   const systemPrompt = buildSpiritSystemPrompt();
   const openingPrompt = buildSpiritOpeningPrompt(
     ctx.hexagramFullName,
@@ -55,14 +54,11 @@ export async function POST(req: NextRequest) {
 
   let openingMessage: string;
   try {
-    openingMessage = await generateGeminiReply(systemPrompt, openingPrompt);
-  } catch (err) {
-    if (err instanceof GeminiClientError) {
-      // Fallback opening
-      openingMessage = `我是${ctx.hexagramFullName}。"${ctx.xiangOverall}"——这是这个卦给你的第一句话。你刚才问的这件事，在这个卦里，真正值得你留意的会是哪一处？`;
-    } else {
-      return NextResponse.json({ error: "卦灵开场生成失败" }, { status: 502 });
-    }
+    openingMessage = await generateSpiritReply(systemPrompt, openingPrompt);
+  } catch {
+    // All LLMs failed — use a quality fallback based on actual card data
+    const xiangQuote = ctx.xiangOverall ? `"${ctx.xiangOverall}"` : "";
+    openingMessage = `${xiangQuote}${xiangQuote ? "——" : ""}${ctx.hexagramFullName}的气象摆在这里，它不急着给你答案。但你刚才带来的这个问题，在这个卦的结构里，有一处最值得你停下来多看一眼。你觉得是哪里？`;
   }
 
   addMessage(session.sessionId, "assistant", openingMessage);

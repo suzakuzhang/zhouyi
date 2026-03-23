@@ -1,3 +1,9 @@
+import fs from "fs";
+import path from "path";
+
+const DATA_DIR = path.resolve(process.cwd());
+const SPIRIT_FILE = path.join(DATA_DIR, "spirit_data.json");
+
 interface SpiritMessage {
   role: "user" | "assistant";
   content: string;
@@ -10,7 +16,7 @@ export interface SpiritSession {
   castId: string;
   hexagramName: string;
   hexagramFullName: string;
-  orientation: string; // not applicable for yijing, kept for compatibility
+  orientation: string;
   question: string;
   startedAt: string;
   expiresAt: string;
@@ -31,12 +37,38 @@ interface CastContext {
   changedHexagramName?: string;
 }
 
-const TTL_SECONDS = 600; // 10 minutes
+interface SpiritStore {
+  castContexts: Record<string, CastContext>;
+  sessions: Record<string, SpiritSession>;
+}
+
+const TTL_SECONDS = 600;
 const MAX_ROUNDS = 8;
 
-// In-memory session store
-const castContexts = new Map<string, CastContext>();
-const sessions = new Map<string, SpiritSession>();
+function load(): SpiritStore {
+  try {
+    if (fs.existsSync(SPIRIT_FILE)) {
+      const raw = fs.readFileSync(SPIRIT_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
+      return {
+        castContexts: parsed.castContexts ?? {},
+        sessions: parsed.sessions ?? {},
+      };
+    }
+  } catch { /* ignore */ }
+  return { castContexts: {}, sessions: {} };
+}
+
+function save(store: SpiritStore): void {
+  // Clean up expired/ended sessions older than 1 hour
+  const cutoff = Date.now() - 3600_000;
+  for (const [id, s] of Object.entries(store.sessions)) {
+    if (s.status !== "active" && new Date(s.startedAt).getTime() < cutoff) {
+      delete store.sessions[id];
+    }
+  }
+  fs.writeFileSync(SPIRIT_FILE, JSON.stringify(store, null, 2), "utf-8");
+}
 
 function randomId(): string {
   return Array.from({ length: 16 }, () =>
@@ -45,15 +77,19 @@ function randomId(): string {
 }
 
 export function registerCast(ctx: CastContext): void {
-  castContexts.set(ctx.castId, ctx);
+  const store = load();
+  store.castContexts[ctx.castId] = ctx;
+  save(store);
 }
 
 export function getCastContext(castId: string): CastContext | null {
-  return castContexts.get(castId) ?? null;
+  const store = load();
+  return store.castContexts[castId] ?? null;
 }
 
 export function createSpiritSession(castId: string): SpiritSession | null {
-  const ctx = castContexts.get(castId);
+  const store = load();
+  const ctx = store.castContexts[castId];
   if (!ctx) return null;
 
   const sessionId = `spirit_${randomId()}`;
@@ -72,17 +108,19 @@ export function createSpiritSession(castId: string): SpiritSession | null {
     messages: [],
   };
 
-  sessions.set(sessionId, session);
+  store.sessions[sessionId] = session;
+  save(store);
   return session;
 }
 
 export function getSpiritSession(sessionId: string): SpiritSession | null {
-  const session = sessions.get(sessionId);
+  const store = load();
+  const session = store.sessions[sessionId];
   if (!session) return null;
 
-  // Check expiry
-  if (new Date() >= new Date(session.expiresAt)) {
+  if (session.status === "active" && new Date() >= new Date(session.expiresAt)) {
     session.status = "expired";
+    save(store);
   }
   return session;
 }
@@ -96,31 +134,37 @@ export function addMessage(
   role: "user" | "assistant",
   content: string
 ): void {
-  const session = sessions.get(sessionId);
+  const store = load();
+  const session = store.sessions[sessionId];
   if (!session) return;
 
-  const roundIndex = session.messages.length;
   session.messages.push({
     role,
     content,
     createdAt: new Date().toISOString(),
-    roundIndex,
+    roundIndex: session.messages.length,
   });
+  save(store);
 }
 
 export function consumeRound(sessionId: string): void {
-  const session = sessions.get(sessionId);
+  const store = load();
+  const session = store.sessions[sessionId];
   if (!session) return;
+
   session.remainingRounds = Math.max(0, session.remainingRounds - 1);
   if (session.remainingRounds === 0) {
     session.status = "ended";
   }
+  save(store);
 }
 
 export function endSession(sessionId: string): void {
-  const session = sessions.get(sessionId);
+  const store = load();
+  const session = store.sessions[sessionId];
   if (session && session.status === "active") {
     session.status = "ended";
+    save(store);
   }
 }
 
@@ -128,7 +172,8 @@ export function getRecentMessages(
   sessionId: string,
   maxCount = 8
 ): SpiritMessage[] {
-  const session = sessions.get(sessionId);
+  const store = load();
+  const session = store.sessions[sessionId];
   if (!session) return [];
   return session.messages.slice(-maxCount);
 }

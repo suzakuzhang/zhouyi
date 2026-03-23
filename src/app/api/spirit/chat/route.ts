@@ -7,7 +7,7 @@ import {
   consumeRound,
   getRecentMessages,
 } from "@/lib/spirit/session";
-import { generateGeminiReply, GeminiClientError } from "@/lib/llm/gemini";
+import { generateSpiritReply } from "@/lib/llm/spiritLlm";
 import { buildSpiritSystemPrompt, buildSpiritReplyPrompt } from "@/lib/spirit/prompts";
 
 export async function POST(req: NextRequest) {
@@ -41,10 +41,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "演卦上下文丢失" }, { status: 500 });
   }
 
-  // Record user message
   addMessage(sessionId, "user", userMessage);
 
-  // Build prompt
   const recent = getRecentMessages(sessionId, 8);
   const systemPrompt = buildSpiritSystemPrompt();
   const replyPrompt = buildSpiritReplyPrompt(
@@ -58,13 +56,9 @@ export async function POST(req: NextRequest) {
 
   let reply: string;
   try {
-    reply = await generateGeminiReply(systemPrompt, replyPrompt);
-  } catch (err) {
-    if (err instanceof GeminiClientError) {
-      reply = "这个卦暂时沉默了。也许你可以换一个角度再问一次。";
-    } else {
-      return NextResponse.json({ error: "卦灵回复生成失败" }, { status: 502 });
-    }
+    reply = await generateSpiritReply(systemPrompt, replyPrompt);
+  } catch {
+    reply = `"${ctx.guaCi.slice(0, 20)}"——这个卦没有直接回答你，但它一直在指向同一个方向。也许你可以换个角度再说说看。`;
   }
 
   addMessage(sessionId, "assistant", reply);
