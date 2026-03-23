@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import HexagramSymbol from "@/components/HexagramSymbol";
 import TextLayerLabel from "@/components/TextLayerLabel";
 import SpiritPanel from "@/components/SpiritPanel";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 interface TextRef {
   ref: string;
@@ -240,6 +241,10 @@ export default function ResultPage() {
           )}
         </div>
         {llmError && <p className="text-sm text-red-600">{llmError}</p>}
+        <LoadingOverlay
+          visible={llmLoading}
+          hexagramName={rawCastResult.originalHexagram.name}
+        />
         {llmSummary && (
           <div className="space-y-4 bg-gray-50 border border-[var(--border)] rounded p-5">
             {llmSummary.guaxiang && (
