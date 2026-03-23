@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: zhouyi
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npx next start -p ${PORT:-10000}
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PILOT_ADMIN_CODE
+        sync: false
+      - key: PILOT_ADMIN_BIRTH_DATE
+        sync: false

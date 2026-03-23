@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --foreground: #1a1a1a;
+  --background: #faf9f6;
+  --muted: #6b7280;
+  --border: #e5e5e5;
+  --accent: #4a5568;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: "Noto Serif SC", "Source Han Serif SC", serif, system-ui;
+}
+
+.text-layer-jingwen {
+  border-left: 3px solid #b45309;
+  padding-left: 0.75rem;
+}
+
+.text-layer-chuanwen {
+  border-left: 3px solid #1d4ed8;
+  padding-left: 0.75rem;
+}
+
+.text-layer-system {
+  border-left: 3px solid #6b7280;
+  padding-left: 0.75rem;
+}
