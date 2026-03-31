@@ -177,3 +177,26 @@ export function getRecentMessages(
   if (!session) return [];
   return session.messages.slice(-maxCount);
 }
+
+export function exportSpiritResearchData(): {
+  castContexts: CastContext[];
+  sessions: SpiritSession[];
+  counts: { castContexts: number; sessions: number };
+} {
+  const store = load();
+  const castContexts = Object.values(store.castContexts).sort((a, b) =>
+    a.castId.localeCompare(b.castId)
+  );
+  const sessions = Object.values(store.sessions).sort((a, b) =>
+    a.startedAt.localeCompare(b.startedAt)
+  );
+
+  return {
+    castContexts,
+    sessions,
+    counts: {
+      castContexts: castContexts.length,
+      sessions: sessions.length,
+    },
+  };
+}

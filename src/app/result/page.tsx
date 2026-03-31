@@ -100,6 +100,7 @@ export default function ResultPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          castId: result.rawCastResult?.id ?? "",
           structure: result.structure,
           readingStrategy: result.readingStrategy,
           question: result.rawCastResult?.input?.question ?? "",

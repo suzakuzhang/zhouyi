@@ -7,6 +7,7 @@ import { interpret } from "@/lib/explain";
 import { getSession, consumeFreeUse, getFreeUsage, addUsageLog } from "@/lib/access/session";
 import { ROLE_NORMAL, ROLE_INVITE, ROLE_PILOT, ROLE_ADMIN } from "@/lib/access/roles";
 import type { Role } from "@/lib/access/roles";
+import { saveResearchCastCase } from "@/lib/research/store";
 
 function extractRole(req: NextRequest, body: Record<string, unknown>): { role: Role; userId: string } {
   const token = (body.access_token as string ?? req.headers.get("x-access-token") ?? "").trim();
@@ -80,6 +81,25 @@ export async function POST(req: NextRequest) {
       policy,
     },
   });
+
+  try {
+    saveResearchCastCase({
+      castId: castResult.id,
+      role,
+      userId,
+      question: input.question ?? "",
+      method: String(input.method ?? "manual"),
+      policy,
+      originalHexagramName: castResult.originalHexagram.fullName,
+      changedHexagramName: castResult.changedHexagram?.fullName ?? null,
+      changingLines: castResult.changingLines,
+      promptVersion: "zhouyi-cast-structure-v1",
+      castResult,
+      interpretation,
+    });
+  } catch {
+    // Research persistence should not block product flow.
+  }
 
   // Attach free usage info for normal users
   const response: Record<string, unknown> = { ...interpretation };

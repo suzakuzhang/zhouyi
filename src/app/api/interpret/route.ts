@@ -6,6 +6,7 @@ import { ROLE_NORMAL } from "@/lib/access/roles";
 import type { Role } from "@/lib/access/roles";
 import type { StructureLayer } from "@/types/explain";
 import type { ReadingStrategy } from "@/types/reading";
+import { saveResearchInterpretation } from "@/lib/research/store";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
   const structure: StructureLayer | undefined = body.structure;
   const readingStrategy: ReadingStrategy | undefined = body.readingStrategy;
   const question: string | undefined = body.question;
+  const castId = String(body.castId ?? "").trim();
 
   if (!structure || !readingStrategy) {
     return NextResponse.json(
@@ -47,6 +49,26 @@ export async function POST(req: NextRequest) {
       question: question ?? "",
       ip: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "",
     });
+
+    if (castId) {
+      try {
+        saveResearchInterpretation({
+          castId,
+          role,
+          userId,
+          question: question ?? "",
+          model: "deepseek-chat",
+          promptVersion: "zhouyi-interpret-v1",
+          structure,
+          readingStrategy,
+          systemPrompt,
+          userPrompt,
+          result,
+        });
+      } catch {
+        // Research persistence should not block product flow.
+      }
+    }
 
     return NextResponse.json(result);
   } catch (err) {
