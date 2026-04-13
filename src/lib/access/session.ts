@@ -6,7 +6,7 @@ import { ROLE_NORMAL } from "./roles";
 const DATA_DIR = path.resolve(process.cwd());
 const DATA_FILE = path.join(DATA_DIR, "access_data.json");
 
-const FREE_GLOBAL_LIMIT = 99;
+const FREE_GLOBAL_LIMIT = 9999;
 
 // ── Types ────────────────────────────────────────────
 
