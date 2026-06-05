@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import HexagramSymbol from "@/components/HexagramSymbol";
 import TextLayerLabel from "@/components/TextLayerLabel";
+import { useLocale } from "@/components/LocaleProvider";
+import { messages } from "@/lib/i18n/messages";
+import { hexEn, hexNameEn } from "@/lib/i18n/hexEn";
+
+// Chinese trigram char → English image name, from the message catalogue.
+const TRIG_EN: Record<string, string> = Object.fromEntries(
+  messages.zh.cast.trigrams.map((z, i) => [z, messages.en.cast.trigrams[i]])
+);
 
 interface Hexagram {
   id: number;
@@ -26,10 +34,10 @@ interface Hexagram {
   zagua?: string;
 }
 
-const yaoNames = ["初", "二", "三", "四", "五", "上"];
-
 export default function HexagramDetailPage() {
   const params = useParams();
+  const { t, locale } = useLocale();
+  const d = t.hexDetail;
   const [hex, setHex] = useState<Hexagram | null>(null);
   const [tab, setTab] = useState<"guaCi" | "yaoCi" | "tuan" | "xiang" | "wenyan" | "other">("guaCi");
 
@@ -37,21 +45,33 @@ export default function HexagramDetailPage() {
     if (params.id) {
       fetch(`/api/hexagram/${params.id}`)
         .then((r) => r.json())
-        .then((d) => setHex(d));
+        .then((dd) => setHex(dd));
     }
   }, [params.id]);
 
   if (!hex) {
-    return <p className="text-[var(--muted)]">加载中…</p>;
+    return <p className="text-[var(--muted)]">{d.loading}</p>;
   }
 
+  // English (Legge, public domain) when locale is en; null falls back to Chinese.
+  const E = locale === "en" ? hexEn(hex.id) : null;
+  const pick = (en: string | undefined | null, zh: string) => (E && en ? en : zh);
+  const trig = (zhChar: string) => (locale === "en" ? TRIG_EN[zhChar] ?? zhChar : zhChar);
+
+  const heading = locale === "en" ? hexNameEn(hex.id) || hex.fullName : hex.fullName;
+  const sectionLabel = d.sections[hex.section] ?? hex.section;
+  const trigLine =
+    locale === "en"
+      ? `${trig(hex.lowerTrigram)} below · ${trig(hex.upperTrigram)} above`
+      : `${hex.lowerTrigram}下${hex.upperTrigram}上`;
+
   const tabs = [
-    { key: "guaCi", label: "卦辞" },
-    { key: "yaoCi", label: "爻辞" },
-    { key: "tuan", label: "彖传" },
-    { key: "xiang", label: "象传" },
-    ...(hex.wenyan ? [{ key: "wenyan", label: "文言" }] : []),
-    ...(hex.xugua || hex.zagua ? [{ key: "other", label: "序卦·杂卦" }] : []),
+    { key: "guaCi", label: d.tabs.guaCi },
+    { key: "yaoCi", label: d.tabs.yaoCi },
+    { key: "tuan", label: d.tabs.tuan },
+    { key: "xiang", label: d.tabs.xiang },
+    ...(hex.wenyan ? [{ key: "wenyan", label: d.tabs.wenyan }] : []),
+    ...(hex.xugua || hex.zagua ? [{ key: "other", label: d.tabs.other }] : []),
   ];
 
   return (
@@ -59,26 +79,26 @@ export default function HexagramDetailPage() {
       <div className="flex items-start gap-6">
         <HexagramSymbol lines={hex.lines} size={80} />
         <div>
-          <h1 className="text-2xl font-semibold">{hex.fullName}</h1>
+          <h1 className="text-2xl font-semibold">{heading}</h1>
           <p className="text-sm text-[var(--muted)]">
-            第{hex.id}卦 · {hex.section} · {hex.lowerTrigram}下{hex.upperTrigram}上
+            {d.hexagramN(hex.id)} · {sectionLabel} · {trigLine}
           </p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[var(--border)]">
-        {tabs.map((t) => (
+        {tabs.map((tb) => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key as typeof tab)}
+            key={tb.key}
+            onClick={() => setTab(tb.key as typeof tab)}
             className={`px-3 py-2 text-sm border-b-2 transition-colors ${
-              tab === t.key
+              tab === tb.key
                 ? "border-[#1a1a1a] text-[#1a1a1a] font-medium"
                 : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
             }`}
           >
-            {t.label}
+            {tb.label}
           </button>
         ))}
       </div>
@@ -88,11 +108,15 @@ export default function HexagramDetailPage() {
         {tab === "guaCi" && (
           <div className="space-y-2">
             <TextLayerLabel layer="经文" />
-            <p className="text-layer-jingwen text-sm leading-relaxed">{hex.guaCi}</p>
+            <p className="text-layer-jingwen text-sm leading-relaxed">
+              {pick(E?.judgment_en, hex.guaCi)}
+            </p>
             {hex.yongCi && (
               <>
                 <TextLayerLabel layer="经文" />
-                <p className="text-layer-jingwen text-sm leading-relaxed">{hex.yongCi}</p>
+                <p className="text-layer-jingwen text-sm leading-relaxed">
+                  {pick(E?.yong_en, hex.yongCi)}
+                </p>
               </>
             )}
           </div>
@@ -104,10 +128,10 @@ export default function HexagramDetailPage() {
               <div key={pos} className="space-y-1">
                 <div className="flex items-center gap-2">
                   <TextLayerLabel layer="经文" />
-                  <span className="text-xs text-[var(--muted)]">第{pos}爻 ({yaoNames[pos - 1]})</span>
+                  <span className="text-xs text-[var(--muted)]">{d.lineTag(pos)}</span>
                 </div>
                 <p className="text-layer-jingwen text-sm leading-relaxed">
-                  {hex.yaoCi[String(pos)] ?? ""}
+                  {pick(E?.lines_en?.[String(pos)], hex.yaoCi[String(pos)] ?? "")}
                 </p>
               </div>
             ))}
@@ -117,7 +141,9 @@ export default function HexagramDetailPage() {
         {tab === "tuan" && (
           <div className="space-y-2">
             <TextLayerLabel layer="传文" />
-            <p className="text-layer-chuanwen text-sm leading-relaxed">{hex.tuan}</p>
+            <p className="text-layer-chuanwen text-sm leading-relaxed">
+              {pick(E?.tuan_en, hex.tuan)}
+            </p>
           </div>
         )}
 
@@ -126,9 +152,11 @@ export default function HexagramDetailPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <TextLayerLabel layer="传文" />
-                <span className="text-xs text-[var(--muted)]">大象</span>
+                <span className="text-xs text-[var(--muted)]">{d.greatImage}</span>
               </div>
-              <p className="text-layer-chuanwen text-sm leading-relaxed">{hex.xiang.overall}</p>
+              <p className="text-layer-chuanwen text-sm leading-relaxed">
+                {pick(E?.xiang_overall_en, hex.xiang.overall)}
+              </p>
             </div>
             {[1, 2, 3, 4, 5, 6].map((pos) => {
               const text = hex.xiang.lines[String(pos)];
@@ -137,9 +165,13 @@ export default function HexagramDetailPage() {
                 <div key={pos} className="space-y-1">
                   <div className="flex items-center gap-2">
                     <TextLayerLabel layer="传文" />
-                    <span className="text-xs text-[var(--muted)]">第{pos}爻 小象</span>
+                    <span className="text-xs text-[var(--muted)]">
+                      {d.lineTag(pos)} · {d.smallImage}
+                    </span>
                   </div>
-                  <p className="text-layer-chuanwen text-sm leading-relaxed">{text}</p>
+                  <p className="text-layer-chuanwen text-sm leading-relaxed">
+                    {pick(E?.xiang_line_en?.[String(pos)], text)}
+                  </p>
                 </div>
               );
             })}
@@ -149,7 +181,9 @@ export default function HexagramDetailPage() {
         {tab === "wenyan" && hex.wenyan && (
           <div className="space-y-2">
             <TextLayerLabel layer="传文" />
-            <p className="text-layer-chuanwen text-sm leading-relaxed">{hex.wenyan}</p>
+            <p className="text-layer-chuanwen text-sm leading-relaxed">
+              {pick(E?.wenyan_en, hex.wenyan)}
+            </p>
           </div>
         )}
 
@@ -159,7 +193,7 @@ export default function HexagramDetailPage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <TextLayerLabel layer="传文" />
-                  <span className="text-xs text-[var(--muted)]">序卦传</span>
+                  <span className="text-xs text-[var(--muted)]">{d.xugua}</span>
                 </div>
                 <p className="text-layer-chuanwen text-sm leading-relaxed">{hex.xugua}</p>
               </div>
@@ -168,7 +202,7 @@ export default function HexagramDetailPage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <TextLayerLabel layer="传文" />
-                  <span className="text-xs text-[var(--muted)]">杂卦传</span>
+                  <span className="text-xs text-[var(--muted)]">{d.zagua}</span>
                 </div>
                 <p className="text-layer-chuanwen text-sm leading-relaxed">{hex.zagua}</p>
               </div>
@@ -178,8 +212,11 @@ export default function HexagramDetailPage() {
       </div>
 
       <div className="pt-4 border-t border-[var(--border)]">
-        <a href="/hexagrams" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline">
-          返回六十四卦
+        <a
+          href="/hexagrams"
+          className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline"
+        >
+          {d.back}
         </a>
       </div>
     </div>

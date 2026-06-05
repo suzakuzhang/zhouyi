@@ -1,11 +1,16 @@
+"use client";
+
+import { useLocale } from "@/components/LocaleProvider";
+
 export default function Home() {
+  const { t } = useLocale();
+  const h = t.home;
+
   return (
     <div className="space-y-8">
       <section className="space-y-3">
-        <h1 className="text-2xl font-semibold">周易 — 结构化阅读与演卦系统</h1>
-        <p className="text-[var(--muted)] leading-relaxed">
-          基于《周易本义》文本结构与卦爻系统，提供可验证、可追踪、可解释的周易阅读与演卦工具。
-        </p>
+        <h1 className="text-2xl font-semibold">{h.title}</h1>
+        <p className="text-[var(--muted)] leading-relaxed">{h.intro}</p>
       </section>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -13,28 +18,26 @@ export default function Home() {
           href="/cast"
           className="block border border-[var(--border)] rounded-lg p-6 hover:border-[var(--accent)] transition-colors"
         >
-          <h2 className="font-semibold mb-2">起卦</h2>
-          <p className="text-sm text-[var(--muted)]">
-            铜钱法、梅花易数或复盘，生成本卦、变卦与阅读策略
-          </p>
+          <h2 className="font-semibold mb-2">{h.castTitle}</h2>
+          <p className="text-sm text-[var(--muted)]">{h.castDesc}</p>
         </a>
 
         <a
           href="/hexagrams"
           className="block border border-[var(--border)] rounded-lg p-6 hover:border-[var(--accent)] transition-colors"
         >
-          <h2 className="font-semibold mb-2">六十四卦</h2>
-          <p className="text-sm text-[var(--muted)]">
-            浏览六十四卦，查看卦辞、爻辞与经传文本
-          </p>
+          <h2 className="font-semibold mb-2">{h.hexTitle}</h2>
+          <p className="text-sm text-[var(--muted)]">{h.hexDesc}</p>
         </a>
       </div>
 
       <section className="text-xs text-[var(--muted)] space-y-1 pt-4 border-t border-[var(--border)]">
-        <p>本项目用于经典文本阅读与结构化解释研究，不构成任何现实决策建议。</p>
-        <p>经传文本分层展示，所有解释均标注来源，规则可追踪。</p>
+        <p>{h.disclaimer1}</p>
+        <p>{h.disclaimer2}</p>
         <p className="pt-2">
-          <a href="/admin" className="underline hover:text-[var(--foreground)]">管理后台</a>
+          <a href="/admin" className="underline hover:text-[var(--foreground)]">
+            {h.admin}
+          </a>
         </p>
       </section>
     </div>

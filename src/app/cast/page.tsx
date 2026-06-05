@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LineInput from "@/components/LineInput";
 import HexagramSymbol from "@/components/HexagramSymbol";
+import { useLocale } from "@/components/LocaleProvider";
 
 interface LineState {
   value: number;
@@ -30,34 +31,26 @@ const TRIGRAM_LINES: number[][] = [
   [0, 0, 1], // 艮 (6)
   [0, 0, 0], // 坤 (7)
 ];
-const TRIGRAM_NAMES = ["乾", "兑", "离", "震", "巽", "坎", "艮", "坤"];
 
-function coinLabel(total: number): string {
-  switch (total) {
-    case 6: return "⚋○ 老阴(动)";
-    case 7: return "⚊  少阳";
-    case 8: return "⚋  少阴";
-    case 9: return "⚊○ 老阳(动)";
-    default: return "?";
-  }
-}
-
-function getLunarInfo(): { year: number; month: number; day: number; hour: number; hourName: string } {
+function getLunarInfo(): { year: number; month: number; day: number; hour: number } {
   // 用公历近似：实际梅花易数应用农历，这里用简化版
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const day = now.getDate();
   const h = now.getHours();
-  // 地支时辰：子(23-1)丑(1-3)寅(3-5)卯(5-7)辰(7-9)巳(9-11)午(11-13)未(13-15)申(15-17)酉(17-19)戌(19-21)亥(21-23)
-  const zhiNames = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
+  // 地支时辰索引：子(23-1)=0 ... 亥(21-23)=11
   const zhiIndex = Math.floor(((h + 1) % 24) / 2);
   const hour = zhiIndex + 1; // 子时=1, 丑时=2, ...
-  return { year, month, day, hour, hourName: zhiNames[zhiIndex] + "时" };
+  return { year, month, day, hour };
 }
 
 export default function CastPage() {
   const router = useRouter();
+  const { t } = useLocale();
+  const c = t.cast;
+  const posLabels = c.posLabels;
+
   const [method, setMethod] = useState<CastMethod>("coin");
   const [lines, setLines] = useState<LineState[]>(
     Array.from({ length: 6 }, () => ({ value: 1, changing: false }))
@@ -76,8 +69,9 @@ export default function CastPage() {
   const [meihuaNum2, setMeihuaNum2] = useState("");
   const [meihuaWord, setMeihuaWord] = useState("");
   const [meihuaResult, setMeihuaResult] = useState<{
-    upper: string; lower: string; changingLine: number;
-    upperIdx: number; lowerIdx: number;
+    changingLine: number;
+    upperIdx: number;
+    lowerIdx: number;
     detail: string;
     lines: LineState[];
   } | null>(null);
@@ -99,7 +93,9 @@ export default function CastPage() {
     try {
       const saved = localStorage.getItem("zhouyi_access");
       if (saved) accessToken = JSON.parse(saved).accessToken ?? "";
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     const payload: Record<string, unknown> = {
       method: castMethod,
@@ -121,7 +117,7 @@ export default function CastPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error ?? "演卦失败");
+        setError(data.error ?? c.errors.castFailed);
         setLoading(false);
         return;
       }
@@ -130,7 +126,7 @@ export default function CastPage() {
       sessionStorage.setItem("castResult", JSON.stringify(data));
       router.push("/result");
     } catch {
-      setError("网络错误，请重试。");
+      setError(c.errors.network);
       setLoading(false);
     }
   };
@@ -146,14 +142,22 @@ export default function CastPage() {
     const total = coins[0] + coins[1] + coins[2];
 
     let yao: number, changing: boolean;
-    if (total === 6) { yao = 0; changing = true; }
-    else if (total === 7) { yao = 1; changing = false; }
-    else if (total === 8) { yao = 0; changing = false; }
-    else { yao = 1; changing = true; }
+    if (total === 6) {
+      yao = 0;
+      changing = true;
+    } else if (total === 7) {
+      yao = 1;
+      changing = false;
+    } else if (total === 8) {
+      yao = 0;
+      changing = false;
+    } else {
+      yao = 1;
+      changing = true;
+    }
 
-    const t: CoinThrow = { coins, total, yao, changing };
-    const newThrows = [...coinThrows, t];
-    setCoinThrows(newThrows);
+    const th: CoinThrow = { coins, total, yao, changing };
+    setCoinThrows([...coinThrows, th]);
 
     const newLines = [...lines];
     newLines[coinStep] = { value: yao, changing };
@@ -183,26 +187,39 @@ export default function CastPage() {
   };
 
   const castMeihuaByTime = () => {
-    const { year, month, day, hour, hourName } = getLunarInfo();
+    const { year, month, day, hour } = getLunarInfo();
+    const hourName = `${c.branches[hour - 1]}${c.hourSuffix}`;
     const upperNum = year + month + day;
     const lowerNum = upperNum + hour;
-    const upperIdx = ((upperNum % 8) + 8) % 8 || 8;
-    const lowerIdx = ((lowerNum % 8) + 8) % 8 || 8;
-    const changingLine = ((lowerNum % 6) || 6);
+    const changingLine = lowerNum % 6 || 6;
 
     // 转为0-7索引（梅花易数数序：1乾2兑...8坤，余数0当作8=坤）
-    const uIdx = upperIdx === 8 ? 7 : upperIdx - 1;
-    const lIdx = lowerIdx === 8 ? 7 : lowerIdx - 1;
+    const upperRem = upperNum % 8 || 8;
+    const lowerRem = lowerNum % 8 || 8;
+    const uIdx = upperRem === 8 ? 7 : upperRem - 1;
+    const lIdx = lowerRem === 8 ? 7 : lowerRem - 1;
 
     const newLines = buildMeihuaLines(uIdx, lIdx, changingLine);
     setLines(newLines);
     setMeihuaResult({
-      upper: TRIGRAM_NAMES[uIdx],
-      lower: TRIGRAM_NAMES[lIdx],
       changingLine,
       upperIdx: uIdx,
       lowerIdx: lIdx,
-      detail: `年${year} + 月${month} + 日${day} = ${upperNum} → 上卦 ${upperNum}÷8 余${upperNum % 8 || 8} = ${TRIGRAM_NAMES[uIdx]}；加时辰${hourName}(${hour}) = ${lowerNum} → 下卦 ${lowerNum}÷8 余${lowerNum % 8 || 8} = ${TRIGRAM_NAMES[lIdx]}；动爻 ${lowerNum}÷6 余${lowerNum % 6 || 6} = 第${changingLine}爻`,
+      detail: c.meihua.timeDetail({
+        year,
+        month,
+        day,
+        upperNum,
+        upperRem,
+        upperName: c.trigrams[uIdx],
+        hourName,
+        hour,
+        lowerNum,
+        lowerRem,
+        lowerName: c.trigrams[lIdx],
+        changingRem: changingLine,
+        changingLine,
+      }),
       lines: newLines,
     });
   };
@@ -211,27 +228,34 @@ export default function CastPage() {
     const n1 = parseInt(meihuaNum1);
     const n2 = parseInt(meihuaNum2);
     if (isNaN(n1) || isNaN(n2) || n1 <= 0 || n2 <= 0) {
-      setError("请输入两个正整数");
+      setError(c.errors.twoPositive);
       return;
     }
     setError("");
 
-    const upperIdx = ((n1 % 8) + 8) % 8 || 8;
-    const lowerIdx = ((n2 % 8) + 8) % 8 || 8;
-    const changingLine = (((n1 + n2) % 6) || 6);
+    const upperRem = n1 % 8 || 8;
+    const lowerRem = n2 % 8 || 8;
+    const changingLine = (n1 + n2) % 6 || 6;
 
-    const uIdx = upperIdx === 8 ? 7 : upperIdx - 1;
-    const lIdx = lowerIdx === 8 ? 7 : lowerIdx - 1;
+    const uIdx = upperRem === 8 ? 7 : upperRem - 1;
+    const lIdx = lowerRem === 8 ? 7 : lowerRem - 1;
 
     const newLines = buildMeihuaLines(uIdx, lIdx, changingLine);
     setLines(newLines);
     setMeihuaResult({
-      upper: TRIGRAM_NAMES[uIdx],
-      lower: TRIGRAM_NAMES[lIdx],
       changingLine,
       upperIdx: uIdx,
       lowerIdx: lIdx,
-      detail: `第一数 ${n1} ÷ 8 余${n1 % 8 || 8} → 上卦${TRIGRAM_NAMES[uIdx]}；第二数 ${n2} ÷ 8 余${n2 % 8 || 8} → 下卦${TRIGRAM_NAMES[lIdx]}；(${n1}+${n2}) ÷ 6 余${(n1 + n2) % 6 || 6} → 动爻第${changingLine}爻`,
+      detail: c.meihua.numDetail({
+        n1,
+        n1rem: upperRem,
+        upperName: c.trigrams[uIdx],
+        n2,
+        n2rem: lowerRem,
+        lowerName: c.trigrams[lIdx],
+        sumRem: changingLine,
+        changingLine,
+      }),
       lines: newLines,
     });
   };
@@ -239,14 +263,14 @@ export default function CastPage() {
   const castMeihuaByWord = () => {
     const chars = meihuaWord.trim();
     if (!chars || chars.length < 1) {
-      setError("请输入至少一个字");
+      setError(c.errors.atLeastOneChar);
       return;
     }
     setError("");
 
     // 按字数笔画用 charCode 近似；单字上卦=字码，下卦=字码+时辰
     // 两字以上：前半取上卦，后半取下卦，总笔画取动爻
-    const codes = Array.from(chars).map((c) => c.charCodeAt(0));
+    const codes = Array.from(chars).map((ch) => ch.charCodeAt(0));
     const total = codes.reduce((a, b) => a + b, 0);
 
     let upperNum: number, lowerNum: number;
@@ -260,22 +284,31 @@ export default function CastPage() {
       lowerNum = codes.slice(mid).reduce((a, b) => a + b, 0);
     }
 
-    const changingLine = ((total % 6) || 6);
-    const upperIdx = ((upperNum % 8) + 8) % 8 || 8;
-    const lowerIdx = ((lowerNum % 8) + 8) % 8 || 8;
+    const changingLine = total % 6 || 6;
+    const upperRem = upperNum % 8 || 8;
+    const lowerRem = lowerNum % 8 || 8;
 
-    const uIdx = upperIdx === 8 ? 7 : upperIdx - 1;
-    const lIdx = lowerIdx === 8 ? 7 : lowerIdx - 1;
+    const uIdx = upperRem === 8 ? 7 : upperRem - 1;
+    const lIdx = lowerRem === 8 ? 7 : lowerRem - 1;
 
     const newLines = buildMeihuaLines(uIdx, lIdx, changingLine);
     setLines(newLines);
     setMeihuaResult({
-      upper: TRIGRAM_NAMES[uIdx],
-      lower: TRIGRAM_NAMES[lIdx],
       changingLine,
       upperIdx: uIdx,
       lowerIdx: lIdx,
-      detail: `"${chars}" → 上卦数${upperNum} ÷ 8 余${upperNum % 8 || 8} = ${TRIGRAM_NAMES[uIdx]}；下卦数${lowerNum} ÷ 8 余${lowerNum % 8 || 8} = ${TRIGRAM_NAMES[lIdx]}；总数${total} ÷ 6 余${total % 6 || 6} → 动爻第${changingLine}爻`,
+      detail: c.meihua.wordDetail({
+        chars,
+        upperNum,
+        upperRem,
+        upperName: c.trigrams[uIdx],
+        lowerNum,
+        lowerRem,
+        lowerName: c.trigrams[lIdx],
+        total,
+        totalRem: changingLine,
+        changingLine,
+      }),
       lines: newLines,
     });
   };
@@ -299,25 +332,29 @@ export default function CastPage() {
       { value: 1, changing: false },
       { value: 1, changing: false },
     ]);
-    setQuestion("示例：乾卦初九动");
+    setQuestion(c.manual.exampleQuestion);
   };
-
-  const posLabels = ["初", "二", "三", "四", "五", "上"];
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">起卦</h1>
+      <h1 className="text-xl font-semibold">{c.title}</h1>
 
-      {/* Method tabs: 铜钱法 → 梅花易数 → 复盘 */}
+      {/* Method tabs: coin → meihua → manual */}
       <div className="flex gap-1 border-b border-[var(--border)]">
-        {([
-          { key: "coin" as CastMethod, label: "铜钱法" },
-          { key: "meihua" as CastMethod, label: "梅花易数" },
-          { key: "manual" as CastMethod, label: "复盘" },
-        ]).map((m) => (
+        {(
+          [
+            { key: "coin" as CastMethod, label: c.methods.coin },
+            { key: "meihua" as CastMethod, label: c.methods.meihua },
+            { key: "manual" as CastMethod, label: c.methods.manual },
+          ]
+        ).map((m) => (
           <button
             key={m.key}
-            onClick={() => { setMethod(m.key); setError(""); setMeihuaResult(null); }}
+            onClick={() => {
+              setMethod(m.key);
+              setError("");
+              setMeihuaResult(null);
+            }}
             className={`px-4 py-2 text-sm border-b-2 transition-colors ${
               method === m.key
                 ? "border-[#1a1a1a] font-medium"
@@ -329,24 +366,22 @@ export default function CastPage() {
         ))}
       </div>
 
-      {/* ── 铜钱法 ── */}
+      {/* ── Coin method ── */}
       {method === "coin" && (
         <div className="space-y-4">
-          <p className="text-sm text-[var(--muted)]">
-            三枚铜钱六次投掷。字面=3，花面=2。合计 6=老阴(动)、7=少阳、8=少阴、9=老阳(动)。
-          </p>
+          <p className="text-sm text-[var(--muted)]">{c.coin.intro}</p>
 
           {coinThrows.length > 0 && (
             <div className="space-y-1">
-              {coinThrows.map((t, i) => (
+              {coinThrows.map((th, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm">
                   <span className="w-8 text-[var(--muted)]">{posLabels[i]}</span>
                   <span className="w-24 font-mono">
-                    {t.coins.map((c) => (c === 3 ? "字" : "花")).join(" ")}
+                    {th.coins.map((cc) => (cc === 3 ? c.coin.heads : c.coin.tails)).join(" ")}
                   </span>
-                  <span className="w-8 text-center">{t.total}</span>
-                  <span className={t.changing ? "text-amber-600 font-medium" : ""}>
-                    {coinLabel(t.total)}
+                  <span className="w-8 text-center">{th.total}</span>
+                  <span className={th.changing ? "text-amber-600 font-medium" : ""}>
+                    {c.lineLabels[th.total as 6 | 7 | 8 | 9]}
                   </span>
                 </div>
               ))}
@@ -359,11 +394,14 @@ export default function CastPage() {
                 onClick={throwCoin}
                 className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm hover:bg-[#333]"
               >
-                掷第{coinStep + 1}次（{posLabels[coinStep]}爻）
+                {c.coin.throwBtn(coinStep + 1, posLabels[coinStep])}
               </button>
               {coinStep > 0 && (
-                <button onClick={resetCoin} className="px-4 py-2 border border-[var(--border)] rounded text-sm text-[var(--muted)]">
-                  重来
+                <button
+                  onClick={resetCoin}
+                  className="px-4 py-2 border border-[var(--border)] rounded text-sm text-[var(--muted)]"
+                >
+                  {c.coin.reset}
                 </button>
               )}
             </div>
@@ -374,31 +412,37 @@ export default function CastPage() {
                 changingLines={lines.map((l, i) => (l.changing ? i + 1 : 0)).filter((p) => p > 0)}
                 size={64}
               />
-              <button onClick={resetCoin} className="px-4 py-2 border border-[var(--border)] rounded text-sm text-[var(--muted)]">
-                重来
+              <button
+                onClick={resetCoin}
+                className="px-4 py-2 border border-[var(--border)] rounded text-sm text-[var(--muted)]"
+              >
+                {c.coin.reset}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* ── 梅花易数 ── */}
+      {/* ── Meihua ── */}
       {method === "meihua" && (
         <div className="space-y-4">
-          <p className="text-sm text-[var(--muted)]">
-            梅花易数以数起卦，万物皆可为数。选择一种起卦方式：
-          </p>
+          <p className="text-sm text-[var(--muted)]">{c.meihua.intro}</p>
 
           {/* Sub-tabs */}
           <div className="flex gap-2">
-            {([
-              { key: "time" as const, label: "当下时间" },
-              { key: "two_num" as const, label: "报二数" },
-              { key: "word" as const, label: "文字起卦" },
-            ]).map((m) => (
+            {(
+              [
+                { key: "time" as const, label: c.meihua.modes.time },
+                { key: "two_num" as const, label: c.meihua.modes.two_num },
+                { key: "word" as const, label: c.meihua.modes.word },
+              ]
+            ).map((m) => (
               <button
                 key={m.key}
-                onClick={() => { setMeihuaMode(m.key); resetMeihua(); }}
+                onClick={() => {
+                  setMeihuaMode(m.key);
+                  resetMeihua();
+                }}
                 className={`px-3 py-1.5 text-xs rounded border transition-colors ${
                   meihuaMode === m.key
                     ? "border-[#1a1a1a] bg-[#1a1a1a] text-white"
@@ -412,15 +456,13 @@ export default function CastPage() {
 
           {meihuaMode === "time" && (
             <div className="space-y-3">
-              <p className="text-xs text-[var(--muted)]">
-                以当前年月日时辰起卦。年+月+日 → 上卦，年+月+日+时辰 → 下卦，总数 ÷ 6 余数 → 动爻。
-              </p>
+              <p className="text-xs text-[var(--muted)]">{c.meihua.timeHint}</p>
               {!meihuaResult && (
                 <button
                   onClick={castMeihuaByTime}
                   className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm hover:bg-[#333]"
                 >
-                  以此刻起卦
+                  {c.meihua.timeBtn}
                 </button>
               )}
             </div>
@@ -428,15 +470,13 @@ export default function CastPage() {
 
           {meihuaMode === "two_num" && (
             <div className="space-y-3">
-              <p className="text-xs text-[var(--muted)]">
-                心中想好问题，随意报两个正整数。第一数 → 上卦，第二数 → 下卦，两数之和 ÷ 6 → 动爻。
-              </p>
+              <p className="text-xs text-[var(--muted)]">{c.meihua.twoNumHint}</p>
               <div className="flex gap-2 items-end">
                 <input
                   type="number"
                   value={meihuaNum1}
                   onChange={(e) => setMeihuaNum1(e.target.value)}
-                  placeholder="第一数"
+                  placeholder={c.meihua.num1Ph}
                   min="1"
                   className="w-24 border border-[var(--border)] rounded px-3 py-2 text-sm"
                 />
@@ -444,7 +484,7 @@ export default function CastPage() {
                   type="number"
                   value={meihuaNum2}
                   onChange={(e) => setMeihuaNum2(e.target.value)}
-                  placeholder="第二数"
+                  placeholder={c.meihua.num2Ph}
                   min="1"
                   className="w-24 border border-[var(--border)] rounded px-3 py-2 text-sm"
                 />
@@ -453,7 +493,7 @@ export default function CastPage() {
                     onClick={castMeihuaByNumbers}
                     className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm hover:bg-[#333]"
                   >
-                    起卦
+                    {c.meihua.castBtn}
                   </button>
                 )}
               </div>
@@ -462,15 +502,13 @@ export default function CastPage() {
 
           {meihuaMode === "word" && (
             <div className="space-y-3">
-              <p className="text-xs text-[var(--muted)]">
-                输入一个字或一组词。单字以字码取上卦、字码加时辰取下卦；多字前半取上、后半取下，总数取动爻。
-              </p>
+              <p className="text-xs text-[var(--muted)]">{c.meihua.wordHint}</p>
               <div className="flex gap-2 items-end">
                 <input
                   type="text"
                   value={meihuaWord}
                   onChange={(e) => setMeihuaWord(e.target.value)}
-                  placeholder="输入文字"
+                  placeholder={c.meihua.wordPh}
                   maxLength={20}
                   className="w-40 border border-[var(--border)] rounded px-3 py-2 text-sm"
                 />
@@ -479,7 +517,7 @@ export default function CastPage() {
                     onClick={castMeihuaByWord}
                     className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm hover:bg-[#333]"
                   >
-                    起卦
+                    {c.meihua.castBtn}
                   </button>
                 )}
               </div>
@@ -496,25 +534,33 @@ export default function CastPage() {
                   size={64}
                 />
                 <div className="text-sm space-y-1">
-                  <p>上卦 <strong>{meihuaResult.upper}</strong>　下卦 <strong>{meihuaResult.lower}</strong></p>
-                  <p>动爻：第 <strong className="text-amber-600">{meihuaResult.changingLine}</strong> 爻</p>
+                  <p>
+                    {c.meihua.resultUpper}{" "}
+                    <strong>{c.trigrams[meihuaResult.upperIdx]}</strong>
+                    {"　"}
+                    {c.meihua.resultLower}{" "}
+                    <strong>{c.trigrams[meihuaResult.lowerIdx]}</strong>
+                  </p>
+                  <p>
+                    {c.meihua.resultChanging}{" "}
+                    <strong className="text-amber-600">{meihuaResult.changingLine}</strong>{" "}
+                    {c.meihua.resultChangingTail}
+                  </p>
                 </div>
               </div>
               <p className="text-xs text-[var(--muted)] leading-relaxed">{meihuaResult.detail}</p>
               <button onClick={resetMeihua} className="text-xs text-[var(--muted)] underline">
-                重新起卦
+                {c.meihua.recast}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* ── 复盘 ── */}
+      {/* ── Manual replay ── */}
       {method === "manual" && (
         <>
-          <p className="text-sm text-[var(--muted)]">
-            从下（初爻）往上（上爻）设定六爻的阴阳与动爻。适合已有起卦结果需要录入查看的情况。
-          </p>
+          <p className="text-sm text-[var(--muted)]">{c.manual.intro}</p>
           <div className="flex gap-8">
             <div className="space-y-0.5">
               {[...Array(6)].map((_, i) => {
@@ -525,7 +571,7 @@ export default function CastPage() {
                     position={pos + 1}
                     value={lines[pos].value}
                     changing={lines[pos].changing}
-                    onChange={(v, c) => updateLine(pos, v, c)}
+                    onChange={(v, ch) => updateLine(pos, v, ch)}
                   />
                 );
               })}
@@ -543,12 +589,12 @@ export default function CastPage() {
 
       {/* Question */}
       <div className="space-y-2">
-        <label className="text-sm text-[var(--muted)]">问题（可选）</label>
+        <label className="text-sm text-[var(--muted)]">{c.question.label}</label>
         <input
           type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="你想问什么"
+          placeholder={c.question.placeholder}
           maxLength={120}
           className="w-full border border-[var(--border)] rounded px-3 py-2 text-sm"
         />
@@ -563,7 +609,7 @@ export default function CastPage() {
           disabled={loading || (method === "coin" && coinStep < 6) || (method === "meihua" && !meihuaResult)}
           className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm hover:bg-[#333] disabled:opacity-50"
         >
-          {loading ? "演卦中…" : "演卦"}
+          {loading ? c.submitting : c.submit}
         </button>
         {method === "manual" && (
           <button
@@ -571,7 +617,7 @@ export default function CastPage() {
             type="button"
             className="px-4 py-2 border border-[var(--border)] rounded text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
           >
-            载入示例
+            {c.manual.loadExample}
           </button>
         )}
       </div>

@@ -6,5 +6,6 @@ out/
 .env*.local
 access_data.json
 spirit_data.json
+research_data.json
 *.tsbuildinfo
 next-env.d.ts

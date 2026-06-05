@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import TextLayerLabel from "@/components/TextLayerLabel";
+import { useLocale } from "@/components/LocaleProvider";
+import { hexNameEn } from "@/lib/i18n/hexEn";
 
 interface SearchHit {
   hexagramId: number;
@@ -15,6 +17,8 @@ interface SearchHit {
 }
 
 export default function SearchPage() {
+  const { t, locale } = useLocale();
+  const s = t.search;
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [total, setTotal] = useState(0);
@@ -30,16 +34,16 @@ export default function SearchPage() {
       setHits(data.hits ?? []);
       setTotal(data.total ?? 0);
       setSearched(true);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setLoading(false);
   };
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">经文检索</h1>
-      <p className="text-sm text-[var(--muted)]">
-        搜索六十四卦的卦辞、爻辞、彖传、象传、文言、序卦传、杂卦传。
-      </p>
+      <h1 className="text-xl font-semibold">{s.title}</h1>
+      <p className="text-sm text-[var(--muted)]">{s.intro}</p>
 
       <div className="flex gap-2">
         <input
@@ -47,7 +51,7 @@ export default function SearchPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && doSearch()}
-          placeholder="输入关键词，如：元亨利贞、君子、大川…"
+          placeholder={s.placeholder}
           className="flex-1 max-w-md border border-[var(--border)] rounded px-3 py-2 text-sm"
         />
         <button
@@ -55,13 +59,14 @@ export default function SearchPage() {
           disabled={loading || !query.trim()}
           className="px-5 py-2 bg-[#1a1a1a] text-white rounded text-sm hover:bg-[#333] disabled:opacity-50"
         >
-          {loading ? "搜索中…" : "搜索"}
+          {loading ? s.searching : s.button}
         </button>
       </div>
 
       {searched && (
         <p className="text-sm text-[var(--muted)]">
-          找到 {total} 条结果{total >= 50 ? "（已截取前 50 条）" : ""}
+          {s.count(total)}
+          {total >= 50 ? s.truncated : ""}
         </p>
       )}
 
@@ -73,7 +78,9 @@ export default function SearchPage() {
                 href={`/hexagrams/${hit.hexagramId}`}
                 className="font-medium text-sm hover:underline"
               >
-                {hit.hexagramFullName}
+                {locale === "en"
+                  ? hexNameEn(hit.hexagramId) || hit.hexagramFullName
+                  : hit.hexagramFullName}
               </a>
               <TextLayerLabel layer={hit.layer} />
               <span className="text-xs text-[var(--muted)]">{hit.label}</span>

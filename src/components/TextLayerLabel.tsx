@@ -1,5 +1,11 @@
+"use client";
+
+import { useLocale } from "./LocaleProvider";
+
+type LayerKey = "经文" | "传文" | "系统说明" | "系统摘要";
+
 interface TextLayerLabelProps {
-  layer: "经文" | "传文" | "系统说明" | "系统摘要";
+  layer: LayerKey;
 }
 
 const styles: Record<string, string> = {
@@ -10,9 +16,13 @@ const styles: Record<string, string> = {
 };
 
 export default function TextLayerLabel({ layer }: TextLayerLabelProps) {
+  const { t } = useLocale();
+  const display = t.layers[layer] ?? layer;
   return (
-    <span className={`inline-block px-2 py-0.5 text-xs rounded ${styles[layer] ?? styles["系统说明"]}`}>
-      {layer}
+    <span
+      className={`inline-block px-2 py-0.5 text-xs rounded ${styles[layer] ?? styles["系统说明"]}`}
+    >
+      {display}
     </span>
   );
 }

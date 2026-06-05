@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "@/components/LocaleProvider";
+import { hexNameEn } from "@/lib/i18n/hexEn";
 
 interface HexagramSummary {
   id: number;
@@ -12,6 +14,7 @@ interface HexagramSummary {
 }
 
 export default function HexagramsPage() {
+  const { t, locale } = useLocale();
   const [hexagrams, setHexagrams] = useState<HexagramSummary[]>([]);
   const [search, setSearch] = useState("");
 
@@ -21,24 +24,27 @@ export default function HexagramsPage() {
       .then((d) => setHexagrams(d.hexagrams ?? []));
   }, []);
 
+  const nameEn = (id: number) => hexNameEn(id);
+
   const filtered = search
     ? hexagrams.filter(
         (h) =>
           h.name.includes(search) ||
           h.fullName.includes(search) ||
+          nameEn(h.id).toLowerCase().includes(search.toLowerCase()) ||
           String(h.id) === search
       )
     : hexagrams;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">六十四卦</h1>
+      <h1 className="text-xl font-semibold">{t.hexagrams.title}</h1>
 
       <input
         type="text"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="搜索卦名或卦序…"
+        placeholder={t.hexagrams.searchPh}
         className="w-full max-w-sm border border-[var(--border)] rounded px-3 py-2 text-sm"
       />
 
@@ -50,8 +56,12 @@ export default function HexagramsPage() {
             className="border border-[var(--border)] rounded p-2 text-center hover:border-[var(--accent)] transition-colors"
           >
             <span className="text-xs text-[var(--muted)]">{h.id}</span>
-            <p className="font-semibold text-sm">{h.name}</p>
-            <p className="text-xs text-[var(--muted)]">{h.fullName}</p>
+            <p className="font-semibold text-sm">
+              {locale === "en" ? nameEn(h.id) || h.name : h.name}
+            </p>
+            <p className="text-xs text-[var(--muted)]">
+              {locale === "en" ? `#${h.id}` : h.fullName}
+            </p>
           </a>
         ))}
       </div>

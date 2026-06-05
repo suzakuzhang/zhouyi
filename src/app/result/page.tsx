@@ -5,6 +5,20 @@ import HexagramSymbol from "@/components/HexagramSymbol";
 import TextLayerLabel from "@/components/TextLayerLabel";
 import SpiritPanel from "@/components/SpiritPanel";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import { useLocale } from "@/components/LocaleProvider";
+import { messages } from "@/lib/i18n/messages";
+import { hexNameEn } from "@/lib/i18n/hexEn";
+import {
+  enTextLabel,
+  enTextContent,
+  enRationale,
+  enDynamicStatic,
+} from "@/lib/i18n/localizeReading";
+
+// Chinese trigram char → English image name, derived from the message catalogue.
+const TRIG_EN: Record<string, string> = Object.fromEntries(
+  messages.zh.cast.trigrams.map((z, i) => [z, messages.en.cast.trigrams[i]])
+);
 
 interface TextRef {
   ref: string;
@@ -57,11 +71,13 @@ interface InterpretationResult {
 }
 
 function SmallHexCard({ label, hex }: { label: string; hex: HexagramBrief }) {
+  const { locale } = useLocale();
+  const name = locale === "en" ? hexNameEn(hex.id) || hex.fullName : hex.fullName;
   return (
     <div className="text-center space-y-1">
       <p className="text-xs text-[var(--muted)]">{label}</p>
       <HexagramSymbol lines={hex.lines} size={48} />
-      <p className="text-xs font-medium">{hex.fullName}</p>
+      <p className="text-xs font-medium">{name}</p>
     </div>
   );
 }
@@ -81,6 +97,8 @@ interface LlmSummary {
 }
 
 export default function ResultPage() {
+  const { t, locale } = useLocale();
+  const r = t.result;
   const [result, setResult] = useState<InterpretationResult | null>(null);
   const [llmSummary, setLlmSummary] = useState<LlmSummary | null>(null);
   const [llmLoading, setLlmLoading] = useState(false);
@@ -108,23 +126,36 @@ export default function ResultPage() {
       });
       if (!res.ok) {
         const d = await res.json();
-        setLlmError(d.error ?? "解读失败");
+        setLlmError(d.error ?? r.llmFailed);
       } else {
         setLlmSummary(await res.json());
       }
     } catch {
-      setLlmError("网络错误");
+      setLlmError(r.llmNetwork);
     } finally {
       setLlmLoading(false);
     }
   };
 
+  // hexagram name in the active locale
+  const nameOf = (id: number, zhName: string) =>
+    locale === "en" ? hexNameEn(id) || zhName : zhName;
+  const trig = (zhChar: string) => (locale === "en" ? TRIG_EN[zhChar] ?? zhChar : zhChar);
+  const locLabel = (ref: string, zhLabel: string) =>
+    locale === "en" ? enTextLabel(ref, zhLabel) : zhLabel;
+  const locContent = (ref: string, zhContent: string) =>
+    locale === "en" ? enTextContent(ref) ?? zhContent : zhContent;
+
   if (!result) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold">演卦结果</h1>
+        <h1 className="text-xl font-semibold">{r.title}</h1>
         <p className="text-[var(--muted)]">
-          暂无结果。请先<a href="/cast" className="underline">起卦</a>。
+          {r.emptyPre}
+          <a href="/cast" className="underline">
+            {r.emptyLink}
+          </a>
+          {r.emptyPost}
         </p>
       </div>
     );
@@ -135,20 +166,22 @@ export default function ResultPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-xl font-semibold">演卦结果</h1>
+      <h1 className="text-xl font-semibold">{r.title}</h1>
 
       {/* Main Hexagrams: Original → Changed */}
       <div className="flex gap-8 items-start">
         <div className="text-center space-y-2">
-          <p className="text-xs text-[var(--muted)]">本卦</p>
+          <p className="text-xs text-[var(--muted)]">{r.original}</p>
           <HexagramSymbol
             lines={rawCastResult.originalHexagram.lines}
             changingLines={rawCastResult.changingLines}
             size={72}
           />
-          <p className="font-semibold">{structure.originalHexagramName}</p>
+          <p className="font-semibold">
+            {nameOf(structure.originalHexagramId, structure.originalHexagramName)}
+          </p>
           <p className="text-xs text-[var(--muted)]">
-            {structure.lowerTrigram}下 {structure.upperTrigram}上
+            {r.lowerUpper(trig(structure.lowerTrigram), trig(structure.upperTrigram))}
           </p>
         </div>
 
@@ -158,9 +191,14 @@ export default function ResultPage() {
               <span className="text-[var(--muted)] text-lg">→</span>
             </div>
             <div className="text-center space-y-2">
-              <p className="text-xs text-[var(--muted)]">变卦</p>
+              <p className="text-xs text-[var(--muted)]">{r.changed}</p>
               <HexagramSymbol lines={rawCastResult.changedHexagram.lines} size={72} />
-              <p className="font-semibold">{structure.changedHexagramName}</p>
+              <p className="font-semibold">
+                {nameOf(
+                  structure.changedHexagramId ?? rawCastResult.changedHexagram.id,
+                  structure.changedHexagramName ?? rawCastResult.changedHexagram.fullName
+                )}
+              </p>
             </div>
           </>
         )}
@@ -169,44 +207,65 @@ export default function ResultPage() {
       {/* Mutual / Inverse / Reversed */}
       {(mutualHexagram || inverseHexagram || reversedHexagram) && (
         <section className="space-y-2">
-          <h2 className="font-semibold text-sm text-[var(--muted)]">辅助卦象</h2>
-          <p className="text-xs text-[var(--muted)]">仅作结构参考，不直接等同主断。</p>
+          <h2 className="font-semibold text-sm text-[var(--muted)]">{r.auxTitle}</h2>
+          <p className="text-xs text-[var(--muted)]">{r.auxNote}</p>
           <div className="flex gap-6 items-start">
-            {mutualHexagram && <SmallHexCard label="互卦" hex={mutualHexagram} />}
-            {inverseHexagram && <SmallHexCard label="错卦" hex={inverseHexagram} />}
-            {reversedHexagram && <SmallHexCard label="综卦" hex={reversedHexagram} />}
+            {mutualHexagram && <SmallHexCard label={r.mutual} hex={mutualHexagram} />}
+            {inverseHexagram && <SmallHexCard label={r.inverse} hex={inverseHexagram} />}
+            {reversedHexagram && <SmallHexCard label={r.reversed} hex={reversedHexagram} />}
           </div>
         </section>
       )}
 
       {/* Structure Layer */}
       <section className="space-y-2">
-        <h2 className="font-semibold text-sm">结构层</h2>
+        <h2 className="font-semibold text-sm">{r.structureTitle}</h2>
         <div className="text-sm space-y-1 text-[var(--muted)]">
-          <p>阴阳分布：阳{structure.yinYangDistribution.yang} 阴{structure.yinYangDistribution.yin}</p>
-          <p>{structure.dynamicStaticRelation}</p>
+          <p>
+            {r.yinyang(
+              structure.yinYangDistribution.yang,
+              structure.yinYangDistribution.yin
+            )}
+          </p>
+          <p>
+            {locale === "en"
+              ? enDynamicStatic(structure.changingLines)
+              : structure.dynamicStaticRelation}
+          </p>
         </div>
       </section>
 
       {/* Reading Strategy */}
       <section className="space-y-2">
-        <h2 className="font-semibold text-sm">阅读策略</h2>
+        <h2 className="font-semibold text-sm">{r.strategyTitle}</h2>
         <p className="text-sm bg-gray-50 rounded px-3 py-2 border border-[var(--border)]">
-          {readingStrategy.rationale}
+          {locale === "en"
+            ? enRationale(
+                readingStrategy.policyName,
+                readingStrategy.changingLineCount,
+                structure.changingLines,
+                structure.originalHexagramId,
+                !!structure.changedHexagramId
+              )
+            : readingStrategy.rationale}
         </p>
       </section>
 
       {/* Primary Texts */}
       <section className="space-y-3">
-        <h2 className="font-semibold text-sm">主读文本</h2>
-        {readingStrategy.primaryTexts.map((t) => (
-          <div key={t.ref} className="space-y-1">
+        <h2 className="font-semibold text-sm">{r.primaryTitle}</h2>
+        {readingStrategy.primaryTexts.map((txt) => (
+          <div key={txt.ref} className="space-y-1">
             <div className="flex items-center gap-2">
-              <TextLayerLabel layer={t.layer} />
-              <span className="text-sm font-medium">{t.label}</span>
+              <TextLayerLabel layer={txt.layer} />
+              <span className="text-sm font-medium">{locLabel(txt.ref, txt.label)}</span>
             </div>
-            <p className={`text-sm leading-relaxed ${t.layer === "经文" ? "text-layer-jingwen" : "text-layer-chuanwen"}`}>
-              {t.content}
+            <p
+              className={`text-sm leading-relaxed ${
+                txt.layer === "经文" ? "text-layer-jingwen" : "text-layer-chuanwen"
+              }`}
+            >
+              {locContent(txt.ref, txt.content)}
             </p>
           </div>
         ))}
@@ -215,15 +274,19 @@ export default function ResultPage() {
       {/* Secondary Texts */}
       {readingStrategy.secondaryTexts.length > 0 && (
         <section className="space-y-3">
-          <h2 className="font-semibold text-sm text-[var(--muted)]">次读文本</h2>
-          {readingStrategy.secondaryTexts.map((t) => (
-            <div key={t.ref} className="space-y-1">
+          <h2 className="font-semibold text-sm text-[var(--muted)]">{r.secondaryTitle}</h2>
+          {readingStrategy.secondaryTexts.map((txt) => (
+            <div key={txt.ref} className="space-y-1">
               <div className="flex items-center gap-2">
-                <TextLayerLabel layer={t.layer} />
-                <span className="text-sm">{t.label}</span>
+                <TextLayerLabel layer={txt.layer} />
+                <span className="text-sm">{locLabel(txt.ref, txt.label)}</span>
               </div>
-              <p className={`text-sm leading-relaxed text-[var(--muted)] ${t.layer === "经文" ? "text-layer-jingwen" : "text-layer-chuanwen"}`}>
-                {t.content}
+              <p
+                className={`text-sm leading-relaxed text-[var(--muted)] ${
+                  txt.layer === "经文" ? "text-layer-jingwen" : "text-layer-chuanwen"
+                }`}
+              >
+                {locContent(txt.ref, txt.content)}
               </p>
             </div>
           ))}
@@ -238,46 +301,51 @@ export default function ResultPage() {
             disabled={llmLoading}
             className="w-full py-4 rounded-lg text-white font-medium text-base bg-gradient-to-r from-[#1a1a1a] to-[#333] hover:from-[#333] hover:to-[#555] active:scale-[0.98] transition-all shadow-sm"
           >
-            赛博解卦
-            <span className="block text-xs font-normal opacity-70 mt-0.5">AI 深度解读卦象 · 象意 · 卦辞 · 势变 · 今解 · 可行</span>
+            {r.llmCta}
+            <span className="block text-xs font-normal opacity-70 mt-0.5">{r.llmCtaSub}</span>
           </button>
         )}
-        {llmLoading && <h2 className="font-semibold text-sm">赛博解卦</h2>}
+        {llmLoading && <h2 className="font-semibold text-sm">{r.llmCta}</h2>}
         {llmError && <p className="text-sm text-red-600">{llmError}</p>}
-        <LoadingOverlay
-          visible={llmLoading}
-          hexagramName={rawCastResult.originalHexagram.name}
-        />
+        <LoadingOverlay visible={llmLoading} hexagramName={rawCastResult.originalHexagram.name} />
         {llmSummary && (
           <div className="space-y-4 bg-gray-50 border border-[var(--border)] rounded p-5">
             {(llmSummary.xiangyi || llmSummary.guaxiang) && (
               <div className="space-y-1">
-                <p className="text-sm font-semibold">象意</p>
-                <p className="text-sm leading-relaxed text-layer-system">{llmSummary.xiangyi || llmSummary.guaxiang}</p>
+                <p className="text-sm font-semibold">{r.fieldXiangyi}</p>
+                <p className="text-sm leading-relaxed text-layer-system">
+                  {llmSummary.xiangyi || llmSummary.guaxiang}
+                </p>
               </div>
             )}
             {(llmSummary.guaci || llmSummary.yaoci) && (
               <div className="space-y-1">
-                <p className="text-sm font-semibold">卦辞</p>
-                <p className="text-sm leading-relaxed text-layer-system">{llmSummary.guaci || llmSummary.yaoci}</p>
+                <p className="text-sm font-semibold">{r.fieldGuaci}</p>
+                <p className="text-sm leading-relaxed text-layer-system">
+                  {llmSummary.guaci || llmSummary.yaoci}
+                </p>
               </div>
             )}
             {(llmSummary.shibian || llmSummary.biangua) && (
               <div className="space-y-1">
-                <p className="text-sm font-semibold">势变</p>
-                <p className="text-sm leading-relaxed text-layer-system">{llmSummary.shibian || llmSummary.biangua}</p>
+                <p className="text-sm font-semibold">{r.fieldShibian}</p>
+                <p className="text-sm leading-relaxed text-layer-system">
+                  {llmSummary.shibian || llmSummary.biangua}
+                </p>
               </div>
             )}
             {(llmSummary.jinjie || llmSummary.baihua) && (
               <div className="space-y-1 bg-amber-50 border border-amber-200 rounded px-4 py-3">
-                <p className="text-sm font-semibold">今解</p>
+                <p className="text-sm font-semibold">{r.fieldJinjie}</p>
                 <p className="text-sm leading-relaxed">{llmSummary.jinjie || llmSummary.baihua}</p>
               </div>
             )}
             {(llmSummary.kexing || llmSummary.jianyi) && (
               <div className="space-y-1 bg-white border border-[var(--border)] rounded px-4 py-3">
-                <p className="text-sm font-semibold">可行</p>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{llmSummary.kexing || llmSummary.jianyi}</p>
+                <p className="text-sm font-semibold">{r.fieldKexing}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {llmSummary.kexing || llmSummary.jianyi}
+                </p>
               </div>
             )}
           </div>
@@ -299,14 +367,23 @@ export default function ResultPage() {
 
       {/* Navigation */}
       <div className="flex gap-3 pt-4 border-t border-[var(--border)]">
-        <a href="/result/texts" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline">
-          文本对照
+        <a
+          href="/result/texts"
+          className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline"
+        >
+          {r.textsLink}
         </a>
-        <a href="/result/debug" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline">
-          开发者视图
+        <a
+          href="/result/debug"
+          className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline"
+        >
+          {r.debugLink}
         </a>
-        <a href="/cast" className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline">
-          重新起卦
+        <a
+          href="/cast"
+          className="text-sm text-[var(--muted)] hover:text-[var(--foreground)] underline"
+        >
+          {r.recast}
         </a>
       </div>
     </div>

@@ -28,3 +28,235 @@ body {
   border-left: 3px solid #6b7280;
   padding-left: 0.75rem;
 }
+
+.serif {
+  font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+}
+
+/* ── 太极双鱼 language gate ─────────────────────────────────────── */
+.zy-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #e9e4d6;
+  animation: zy-fade-in 0.8s ease both;
+}
+.zy-gate-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 36%, #14121f 0%, #0b0a12 55%, #060509 100%);
+}
+.zy-gate-veil::after {
+  /* faint star dust */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 18% 24%, rgba(233, 228, 214, 0.55), transparent),
+    radial-gradient(1px 1px at 72% 16%, rgba(233, 228, 214, 0.4), transparent),
+    radial-gradient(1px 1px at 84% 62%, rgba(233, 228, 214, 0.5), transparent),
+    radial-gradient(1px 1px at 30% 78%, rgba(233, 228, 214, 0.35), transparent),
+    radial-gradient(1px 1px at 56% 88%, rgba(233, 228, 214, 0.3), transparent);
+  opacity: 0.7;
+}
+.zy-gate-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+}
+.zy-gate-title {
+  font-size: 2.6rem;
+  letter-spacing: 0.18em;
+  color: #f1ece0;
+  text-shadow: 0 0 26px rgba(214, 198, 138, 0.35);
+}
+.zy-gate-sub {
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  color: #9b95a8;
+  margin-bottom: 1.4rem;
+}
+.zy-taiji-wrap {
+  width: min(58vw, 280px);
+  height: min(58vw, 280px);
+  animation: zy-breathe 7s ease-in-out infinite;
+}
+.zy-taiji {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.zy-fish {
+  cursor: pointer;
+  transition: opacity 0.5s ease, filter 0.5s ease;
+}
+.zy-yin {
+  fill: #221e33;
+}
+.zy-yang {
+  fill: #e9e4d6;
+}
+.zy-fish.is-armed {
+  filter: drop-shadow(0 0 16px rgba(214, 198, 138, 0.55));
+}
+.zy-fish.is-dim {
+  opacity: 0.45;
+}
+.zy-eye-dark {
+  fill: #16131f;
+  pointer-events: none;
+}
+.zy-eye-light {
+  fill: #e9e4d6;
+  pointer-events: none;
+}
+.zy-ring {
+  stroke: rgba(214, 198, 138, 0.4);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.zy-gate-labels {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  margin-top: 1.6rem;
+}
+.zy-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9b95a8;
+  transition: color 0.4s ease;
+}
+.zy-label:hover,
+.zy-label.is-armed {
+  color: #f1ece0;
+}
+.zy-label-main {
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+}
+.zy-label-hint {
+  font-size: 0.7rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+.zy-label-div {
+  width: 1px;
+  height: 2.4rem;
+  background: rgba(214, 198, 138, 0.25);
+}
+.zy-qmark {
+  margin-top: 1.5rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(214, 198, 138, 0.4);
+  background: transparent;
+  color: #b6afc0;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, transform 0.4s ease;
+}
+.zy-qmark:hover {
+  color: #f1ece0;
+  border-color: rgba(214, 198, 138, 0.8);
+  box-shadow: 0 0 18px rgba(214, 198, 138, 0.35);
+  transform: translateY(-1px);
+}
+.zy-gate-foot {
+  margin-top: 1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: #6f6a7a;
+  max-width: 22rem;
+}
+
+/* newcomer primer panel (bilingual, locale not yet chosen) */
+.zy-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(6, 5, 9, 0.72);
+  backdrop-filter: blur(3px);
+  animation: zy-fade-in 0.35s ease both;
+}
+.zy-intro-card {
+  position: relative;
+  max-width: 34rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 2rem 1.9rem 1.6rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 198, 138, 0.28);
+  background: linear-gradient(160deg, #15131f 0%, #0d0b14 100%);
+  color: #ded8e6;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.zy-intro-block + .zy-intro-block {
+  margin-top: 1.3rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid rgba(214, 198, 138, 0.16);
+}
+.zy-intro-en {
+  color: #b9b3c4;
+}
+.zy-intro-title {
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  color: #f1ece0;
+  margin-bottom: 0.6rem;
+}
+.zy-intro-para {
+  font-size: 0.86rem;
+  line-height: 1.7;
+  margin-top: 0.5rem;
+}
+.zy-intro-close {
+  margin-top: 1.6rem;
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(214, 198, 138, 0.3);
+  background: transparent;
+  color: #cfc8da;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+}
+.zy-intro-close:hover {
+  color: #f1ece0;
+  border-color: rgba(214, 198, 138, 0.7);
+  background: rgba(214, 198, 138, 0.06);
+}
+
+@keyframes zy-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes zy-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zy-taiji-wrap { animation: none; }
+  .zy-gate { animation: none; }
+}
