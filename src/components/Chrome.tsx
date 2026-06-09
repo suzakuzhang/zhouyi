@@ -9,6 +9,7 @@ import { TaijiGate } from "./TaijiGate";
  */
 export function Chrome({ children }: { children: React.ReactNode }) {
   const { t, locale, setLocale, chosen, ready } = useLocale();
+  const githubUrl = "https://github.com/suzakuzhang";
 
   return (
     <>
@@ -44,8 +45,16 @@ export function Chrome({ children }: { children: React.ReactNode }) {
       <main className="max-w-4xl mx-auto px-6 py-8">{children}</main>
 
       <footer className="border-t border-[var(--border)] px-6 py-4 mt-8">
-        <div className="max-w-4xl mx-auto text-center text-xs text-[var(--muted)]">
-          <span>{t.foot}</span>
+        <div className="max-w-4xl mx-auto text-center text-xs text-[var(--muted)] space-y-1">
+          <p>{t.foot}</p>
+          <a
+            href={githubUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block underline underline-offset-4 hover:text-[var(--foreground)]"
+          >
+            Designed by Shumin Zhang
+          </a>
         </div>
       </footer>
     </>
