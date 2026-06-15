@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   const readingStrategy: ReadingStrategy | undefined = body.readingStrategy;
   const question: string | undefined = body.question;
   const castId = String(body.castId ?? "").trim();
+  const locale: "zh" | "en" = body.locale === "en" ? "en" : "zh";
 
   if (!structure || !readingStrategy) {
     return NextResponse.json(
@@ -35,8 +36,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const systemPrompt = buildInterpretSystemPrompt();
-  const userPrompt = buildInterpretUserPrompt(structure, readingStrategy, question);
+  const systemPrompt = buildInterpretSystemPrompt(locale);
+  const userPrompt = buildInterpretUserPrompt(structure, readingStrategy, question, locale);
 
   try {
     const result = await callDeepSeek(systemPrompt, userPrompt);

@@ -1,12 +1,37 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useLocale } from "./LocaleProvider";
 
 // 三阶段状态文案
 const LOADING_STATES = [
   "正在展开卦象的脉络……",
   "正在把你的问题放进这个卦里……",
   "正在生成解卦……",
+];
+
+const LOADING_STATES_EN = [
+  "Tracing the structure of the hexagram…",
+  "Placing your question inside this hexagram…",
+  "Composing the reading…",
+];
+
+const COMMON_FACTS_EN = [
+  `Each of the 64 hexagrams is a cross-section of a single situation.`,
+  `The first line is where things begin, the top line is the end — position itself is information.`,
+  `A yang line in an odd place, a yin line in an even place is "correct position"; being out of place often signals a mismatch.`,
+  `The judgment speaks to the whole picture; the line statements speak to your specific position within it.`,
+  `The Tuan explains why a hexagram is as it is; the Image tells you what to do about it.`,
+  `The changing line is the most active force in the hexagram — at once the key and the variable.`,
+  `The changed hexagram is not a "result"; it is where this force is heading if it keeps developing.`,
+  `The nuclear hexagram hides in the middle — an unseen structure inside the matter.`,
+  `The opposite hexagram inverts every line — the reverse side sometimes tells you more than the front.`,
+  `The reversed hexagram turns the whole figure upside down — the same thing seen from another angle.`,
+  `"Yuan, heng, li, zhen" mark a thing's beginning, flourishing, harvest, and holding firm.`,
+  `Qian and Kun underlie all change — one pure creativity, the other pure receptivity.`,
+  `The Yijing does not predict the future; it helps you see where you now stand.`,
+  `The same hexagram, asked about different matters, lands its weight on different lines.`,
+  `The 64 hexagrams form a chain: from Qian and Kun to Before/After Completion — and completion begins anew.`,
 ];
 
 // 通用碎片知识池
@@ -56,7 +81,9 @@ interface LoadingOverlayProps {
 }
 
 export default function LoadingOverlay({ visible, hexagramName }: LoadingOverlayProps) {
-  const [stateText, setStateText] = useState(LOADING_STATES[0]);
+  const { locale } = useLocale();
+  const states = locale === "en" ? LOADING_STATES_EN : LOADING_STATES;
+  const [stateText, setStateText] = useState(states[0]);
   const [fact, setFact] = useState("");
   const [progress, setProgress] = useState(0);
   const factPool = useRef<string[]>([]);
@@ -68,9 +95,10 @@ export default function LoadingOverlay({ visible, hexagramName }: LoadingOverlay
       return;
     }
 
-    // Build fact pool
-    const specific = hexagramName ? (HEXAGRAM_FACTS[hexagramName] ?? []) : [];
-    const pool = [...specific, ...COMMON_FACTS];
+    // Build fact pool (hexagram-specific facts are zh-only; en uses common pool)
+    const specific =
+      locale === "en" ? [] : hexagramName ? HEXAGRAM_FACTS[hexagramName] ?? [] : [];
+    const pool = locale === "en" ? [...COMMON_FACTS_EN] : [...specific, ...COMMON_FACTS];
     // Shuffle
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -81,9 +109,9 @@ export default function LoadingOverlay({ visible, hexagramName }: LoadingOverlay
     setFact(pool[0] ?? "");
 
     // State transitions
-    setStateText(LOADING_STATES[0]);
-    const t1 = setTimeout(() => setStateText(LOADING_STATES[1]), 2000);
-    const t2 = setTimeout(() => setStateText(LOADING_STATES[2]), 4500);
+    setStateText(states[0]);
+    const t1 = setTimeout(() => setStateText(states[1]), 2000);
+    const t2 = setTimeout(() => setStateText(states[2]), 4500);
 
     // Fact rotation
     const factInterval = setInterval(() => {
@@ -106,7 +134,7 @@ export default function LoadingOverlay({ visible, hexagramName }: LoadingOverlay
       clearInterval(factInterval);
       clearInterval(progressInterval);
     };
-  }, [visible, hexagramName]);
+  }, [visible, hexagramName, locale]);
 
   if (!visible) return null;
 

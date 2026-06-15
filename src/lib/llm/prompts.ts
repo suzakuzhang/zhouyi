@@ -1,8 +1,18 @@
 import type { ReadingStrategy } from "@/types/reading";
 import type { StructureLayer } from "@/types/explain";
 
-export function buildInterpretSystemPrompt(): string {
-  return `你是一位精通《周易》经传体系的解卦师。你的解卦基于扎实的易学功底，而非泛泛的玄学套话。
+type Locale = "zh" | "en";
+
+// Output-language lever: keep the Chinese domain reasoning, switch only the
+// language of the produced values. JSON keys are preserved so parsing is
+// unaffected (see i18n_trilogy_plan §4.2).
+const EN_OUTPUT_DIRECTIVE = `
+
+[OUTPUT LANGUAGE — IMPORTANT]
+Despite the Chinese instructions above, write every JSON string VALUE in fluent, natural English, using standard Yijing / I Ching terminology (hexagram, trigram, judgment, line, the Image, "changing line", etc.). Keep the JSON KEYS exactly as specified (xiangyi / guaci / shibian / jinjie / kexing). Keep the same structure, depth and rough length. When you quote a classical phrase, render it in English. Do not output Chinese.`;
+
+export function buildInterpretSystemPrompt(locale: Locale = "zh"): string {
+  const base = `你是一位精通《周易》经传体系的解卦师。你的解卦基于扎实的易学功底，而非泛泛的玄学套话。
 
 你的解卦方法：
 1. 以卦象结构为骨架：先看上下卦的性质与关系（天地水火雷风山泽的互动），再看动静变化。
@@ -26,12 +36,14 @@ export function buildInterpretSystemPrompt(): string {
   "jinjie": "【今解】用最通俗易懂的日常语言解释这个卦到底在说什么。不用任何易学术语，就像在跟朋友聊天。如果用户问了具体问题，要直接回应这个问题。4-6句，150字左右。",
   "kexing": "【可行】结合用户问题，给出这个卦对当下处境最核心的提醒。要具体、能落地、有洞察。可以分点，给出2-3条实际可参考的方向。不要空泛鸡汤。3-5句，100字左右。"
 }`;
+  return locale === "en" ? base + EN_OUTPUT_DIRECTIVE : base;
 }
 
 export function buildInterpretUserPrompt(
   structure: StructureLayer,
   strategy: ReadingStrategy,
-  question?: string
+  question?: string,
+  locale: Locale = "zh"
 ): string {
   const primaryTextsBlock = strategy.primaryTexts
     .map((t) => `[${t.layer}] ${t.label}: ${t.content}`)
@@ -67,5 +79,9 @@ ${question ? `用户问题：${question}\n\n请在解卦时贴合这个问题的
 5. jianyi 要有洞察力，给出具体可行的方向。
 6. 全文引用经传原文时用「」标注。
 7. 每个字段都要写够要求的字数，不要太短。整体输出 800-1000 字。
-8. 输出合法 JSON，不输出 JSON 以外的内容。`;
+8. 输出合法 JSON，不输出 JSON 以外的内容。${
+    locale === "en"
+      ? "\n9. [IMPORTANT] Write all JSON string values in English (keep the keys unchanged)."
+      : ""
+  }`;
 }

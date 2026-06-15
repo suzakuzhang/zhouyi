@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const sessionId = (body.sessionId ?? "").trim();
   const userMessage = (body.message ?? "").trim();
+  const locale: "zh" | "en" = body.locale === "en" ? "en" : "zh";
 
   if (!sessionId || !userMessage) {
     return NextResponse.json({ error: "缺少 sessionId 或 message" }, { status: 400 });
@@ -44,21 +45,25 @@ export async function POST(req: NextRequest) {
   addMessage(sessionId, "user", userMessage);
 
   const recent = getRecentMessages(sessionId, 8);
-  const systemPrompt = buildSpiritSystemPrompt();
+  const systemPrompt = buildSpiritSystemPrompt(locale);
   const replyPrompt = buildSpiritReplyPrompt(
     ctx.hexagramFullName,
     ctx.guaCi,
     ctx.xiangOverall,
     ctx.question,
     recent.map((m) => ({ role: m.role, content: m.content })),
-    userMessage
+    userMessage,
+    locale
   );
 
   let reply: string;
   try {
     reply = await generateSpiritReply(systemPrompt, replyPrompt);
   } catch {
-    reply = `"${ctx.guaCi.slice(0, 20)}"——这个卦没有直接回答你，但它一直在指向同一个方向。也许你可以换个角度再说说看。`;
+    reply =
+      locale === "en"
+        ? `"${ctx.guaCi.slice(0, 20)}" — this hexagram does not answer you directly, yet it keeps pointing the same way. Perhaps try saying it from another angle.`
+        : `"${ctx.guaCi.slice(0, 20)}"——这个卦没有直接回答你，但它一直在指向同一个方向。也许你可以换个角度再说说看。`;
   }
 
   addMessage(sessionId, "assistant", reply);

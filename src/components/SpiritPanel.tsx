@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useLocale } from "./LocaleProvider";
 
 interface SpiritPanelProps {
   castId: string;
   hexagramName: string;
   hexagramFullName: string;
+  /** locale-aware display title (e.g. English name in en); defaults to fullName */
+  hexagramTitle?: string;
   question: string;
   guaCi: string;
   tuan: string;
@@ -20,6 +23,10 @@ interface Message {
 }
 
 export default function SpiritPanel(props: SpiritPanelProps) {
+  const { t, locale } = useLocale();
+  const sp = t.spirit;
+  const title = props.hexagramTitle ?? props.hexagramFullName;
+
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -36,7 +43,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
     const interval = setInterval(() => {
       const diff = new Date(expiresAt).getTime() - Date.now();
       if (diff <= 0) {
-        setTimeLeft("已超时");
+        setTimeLeft(sp.timedOut);
         setStatus("ended");
         clearInterval(interval);
       } else {
@@ -46,7 +53,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [expiresAt, status]);
+  }, [expiresAt, status, sp.timedOut]);
 
   // Auto-scroll
   useEffect(() => {
@@ -69,6 +76,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
           xiangOverall: props.xiangOverall,
           changingLines: props.changingLines,
           changedHexagramName: props.changedHexagramName,
+          locale,
         }),
       });
       const data = await res.json();
@@ -79,7 +87,9 @@ export default function SpiritPanel(props: SpiritPanelProps) {
         setExpiresAt(data.session.expiresAt);
         setMessages([{ role: "assistant", content: data.openingMessage }]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setLoading(false);
   };
 
@@ -94,7 +104,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
       const res = await fetch("/api/spirit/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, message: msg }),
+        body: JSON.stringify({ sessionId, message: msg, locale }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -102,11 +112,11 @@ export default function SpiritPanel(props: SpiritPanelProps) {
         setRemaining(data.remainingRounds);
         if (data.status !== "active") setStatus("ended");
       } else {
-        setMessages((prev) => [...prev, { role: "assistant", content: data.error ?? "回复失败" }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: data.error ?? sp.replyFailed }]);
         if (data.status) setStatus("ended");
       }
     } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "网络错误" }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: sp.networkError }]);
     }
     setLoading(false);
   };
@@ -117,13 +127,15 @@ export default function SpiritPanel(props: SpiritPanelProps) {
       const res = await fetch("/api/spirit/end", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ sessionId, locale }),
       });
       const data = await res.json();
       if (data.farewell) {
         setMessages((prev) => [...prev, { role: "assistant", content: data.farewell }]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setStatus("ended");
   };
 
@@ -135,8 +147,8 @@ export default function SpiritPanel(props: SpiritPanelProps) {
           disabled={loading}
           className="w-full py-4 rounded-lg font-medium text-base border-2 border-[#1a1a1a] text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white active:scale-[0.98] transition-all"
         >
-          {loading ? "召唤中…" : `召唤卦灵 · ${props.hexagramFullName}`}
-          <span className="block text-xs font-normal opacity-60 mt-0.5">以这个卦的视角和你对话 · 10 分钟 · 8 轮</span>
+          {loading ? sp.summoning : `${sp.summon} · ${title}`}
+          <span className="block text-xs font-normal opacity-60 mt-0.5">{sp.subtitle}</span>
         </button>
       </section>
     );
@@ -147,22 +159,19 @@ export default function SpiritPanel(props: SpiritPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-[var(--border)]">
         <div className="flex items-center gap-3">
-          <h2 className="font-semibold text-sm">卦灵 · {props.hexagramFullName}</h2>
+          <h2 className="font-semibold text-sm">
+            {sp.header} · {title}
+          </h2>
           {status === "active" && (
             <span className="text-xs text-[var(--muted)]">
-              {timeLeft} | 剩余{remaining}轮
+              {timeLeft} | {sp.roundsLeft(remaining)}
             </span>
           )}
-          {status === "ended" && (
-            <span className="text-xs text-[var(--muted)]">已结束</span>
-          )}
+          {status === "ended" && <span className="text-xs text-[var(--muted)]">{sp.ended}</span>}
         </div>
         {status === "active" && (
-          <button
-            onClick={endSpiritSession}
-            className="text-xs text-[var(--muted)] hover:text-red-600"
-          >
-            结束对话
+          <button onClick={endSpiritSession} className="text-xs text-[var(--muted)] hover:text-red-600">
+            {sp.endChat}
           </button>
         )}
       </div>
@@ -173,9 +182,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
           <div key={i} className={m.role === "user" ? "text-right" : ""}>
             <div
               className={`text-sm leading-7 rounded-lg px-4 py-3 inline-block text-left ${
-                m.role === "user"
-                  ? "bg-[#1a1a1a] text-white"
-                  : "bg-gray-100 text-[var(--foreground)]"
+                m.role === "user" ? "bg-[#1a1a1a] text-white" : "bg-gray-100 text-[var(--foreground)]"
               }`}
               style={{
                 maxWidth: "90%",
@@ -199,7 +206,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && sendMessage()}
-            placeholder="继续追问…"
+            placeholder={sp.placeholder}
             maxLength={300}
             disabled={loading}
             className="flex-1 border border-[var(--border)] rounded px-3 py-1.5 text-sm"
@@ -209,7 +216,7 @@ export default function SpiritPanel(props: SpiritPanelProps) {
             disabled={loading || !input.trim()}
             className="px-4 py-1.5 bg-[#1a1a1a] text-white rounded text-sm disabled:opacity-50"
           >
-            {loading ? "…" : "发送"}
+            {loading ? "…" : sp.send}
           </button>
         </div>
       )}

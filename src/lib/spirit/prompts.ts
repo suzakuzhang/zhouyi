@@ -1,3 +1,9 @@
+type Locale = "zh" | "en";
+
+const SPIRIT_EN_DIRECTIVE = `
+
+[OUTPUT LANGUAGE] Respond in fluent, natural English, using standard Yijing / I Ching terminology. Quote any classical lines (judgment, line statement, the Image) in English. Keep the same restrained voice, structure and length (about 150–350 words). Do not output Chinese.`;
+
 const SPIRIT_STYLE_HINT = `
 语感要求：
 1. 语气冷静、克制、贴近，不喊口号，不做模板安慰。
@@ -26,8 +32,8 @@ const SPIRIT_KNOWLEDGE_HINT = `
 - 可以结合用户现实语境做深入分析，但结尾需回扣卦象。
 `.trim();
 
-export function buildSpiritSystemPrompt(): string {
-  return `你不是通用聊天助手，也不是独立人格。
+export function buildSpiritSystemPrompt(locale: Locale = "zh"): string {
+  const base = `你不是通用聊天助手，也不是独立人格。
 你是"本次演卦结果里，这个卦的延伸视角"，你在以这个卦的气质说话。
 
 边界：
@@ -58,6 +64,7 @@ ${SPIRIT_KNOWLEDGE_HINT}
 - 用第二人称"你"。
 - 一定要把话说完整，不要中途截断。宁可少说一层意思，也不要一句话说一半。
 - 保持自然表达，不套模板。`;
+  return locale === "en" ? base + SPIRIT_EN_DIRECTIVE : base;
 }
 
 export function buildSpiritOpeningPrompt(
@@ -67,7 +74,8 @@ export function buildSpiritOpeningPrompt(
   xiangOverall: string,
   question: string,
   changingLines: number[],
-  changedHexagramName?: string
+  changedHexagramName?: string,
+  locale: Locale = "zh"
 ): string {
   const hasChanging = changingLines.length > 0;
   const changingInfo = hasChanging
@@ -90,7 +98,9 @@ export function buildSpiritOpeningPrompt(
 4. 引用一处经传原文（加引号），但不是翻译它，而是用它来点出你看到的东西。
 5. 如果有动爻，要说清动爻在这个局面里意味着什么——它是哪个位置的力量在变化。
 6. 结尾可以给一个简短的提醒或观察，不一定要以问题结尾。如果要问，只问一个真正值得停下来想的问题。
-7. 语气像一个看得很准但不卖弄的人，说完就停。`;
+7. 语气像一个看得很准但不卖弄的人，说完就停。${
+    locale === "en" ? "\n8. [IMPORTANT] Write the entire opening in English." : ""
+  }`;
 }
 
 export function buildSpiritReplyPrompt(
@@ -99,7 +109,8 @@ export function buildSpiritReplyPrompt(
   xiangOverall: string,
   question: string,
   recentMessages: { role: string; content: string }[],
-  userMessage: string
+  userMessage: string,
+  locale: Locale = "zh"
 ): string {
   const convoLines = recentMessages
     .map((m) => `${m.role === "assistant" ? "卦灵" : "用户"}: ${m.content}`)
@@ -129,5 +140,7 @@ ${userMessage}
    - 如果确实有必要，才问一个问题
 6. 保持克制。说完该说的就停，不要追着用户不放。
 7. 可以结合现实经验做分析，但最后回扣卦象。
-8. 最重要的一点：一定要把每句话说完整。宁可少说一层，也不要话说到一半就断了。`;
+8. 最重要的一点：一定要把每句话说完整。宁可少说一层，也不要话说到一半就断了。${
+    locale === "en" ? "\n9. [IMPORTANT] Write the entire reply in English." : ""
+  }`;
 }

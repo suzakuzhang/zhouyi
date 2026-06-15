@@ -122,6 +122,7 @@ export default function ResultPage() {
           structure: result.structure,
           readingStrategy: result.readingStrategy,
           question: result.rawCastResult?.input?.question ?? "",
+          locale,
         }),
       });
       if (!res.ok) {
@@ -357,6 +358,12 @@ export default function ResultPage() {
         castId={result.rawCastResult?.id ?? ""}
         hexagramName={rawCastResult.originalHexagram.name}
         hexagramFullName={rawCastResult.originalHexagram.fullName ?? structure.originalHexagramName}
+        hexagramTitle={
+          locale === "en"
+            ? hexNameEn(structure.originalHexagramId) ||
+              (rawCastResult.originalHexagram.fullName ?? structure.originalHexagramName)
+            : (rawCastResult.originalHexagram.fullName ?? structure.originalHexagramName)
+        }
         question={rawCastResult.input?.question ?? ""}
         guaCi={rawCastResult.originalHexagram.guaCi ?? ""}
         tuan={rawCastResult.originalHexagram.tuan ?? ""}

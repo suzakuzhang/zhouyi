@@ -223,6 +223,21 @@ const zh = {
     zagua: "杂卦传",
   },
 
+  spirit: {
+    summon: "召唤卦灵",
+    summoning: "召唤中…",
+    subtitle: "以这个卦的视角和你对话 · 10 分钟 · 8 轮",
+    header: "卦灵",
+    roundsLeft: (n: number) => `剩余${n}轮`,
+    timedOut: "已超时",
+    ended: "已结束",
+    endChat: "结束对话",
+    placeholder: "继续追问…",
+    send: "发送",
+    replyFailed: "回复失败",
+    networkError: "网络错误",
+  },
+
   foot: "A research prototype",
 };
 
@@ -413,6 +428,21 @@ const en = {
     lineTag: (pos: number) => `Line ${pos}`,
     xugua: "Sequence (Xu Gua)",
     zagua: "Miscellaneous (Za Gua)",
+  },
+
+  spirit: {
+    summon: "Summon the gua-spirit",
+    summoning: "Summoning…",
+    subtitle: "Converse from this hexagram's vantage · 10 min · 8 rounds",
+    header: "Gua-spirit",
+    roundsLeft: (n: number) => `${n} left`,
+    timedOut: "Timed out",
+    ended: "Ended",
+    endChat: "End",
+    placeholder: "Ask further…",
+    send: "Send",
+    replyFailed: "Reply failed",
+    networkError: "Network error",
   },
 
   foot: "A research prototype",
