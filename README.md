@@ -81,6 +81,16 @@ PILOT_ADMIN_BIRTH_DATE=...
 
 A prototype for reflection and research. It does not provide medical, legal, financial, or other professional advice, and its output should not be the sole basis for any high-stakes decision.
 
+## Honest boundaries
+
+**Implemented:** coin-method casting, hexagram/trigram/changing-line resolution, classical text-layer selection, the transparent rule trace, LLM structured reading, optional spirit dialogue.
+
+**Planned, not yet results:** systematic reliability/validity work — cross-prompt stability, expert recognition of the rule trace, and whether ceding authority to an oracular reading is legible to users as a distinct condition rather than just "the app's opinion."
+
 ## Author
 
 Created by Shumin Zhang, as part of a research program on how AI systems mediate symbolic interpretation. For citation or reuse, please credit the original repository and author.
+
+---
+
+*Part of a family of prototypes operationalizing interpretation as AI-mediated, traceable research instruments.*
